@@ -167,7 +167,7 @@ def html_signature() -> str:
 <table cellpadding="0" cellspacing="0" style="font-family:Arial,Helvetica,sans-serif; font-size:13px; color:#222;">
   <tr>
     <td style="padding:10px 0;">
-      <img src="{LOGO_URL}" alt="Şekeroğlu A.Ş." style="max-width:60px; height:auto; display:block;">
+      <img src="{LOGO_URL}" alt="Şekeroğlu A.Ş." style="width:189px; height:38px; display:block;">
     </td>
   </tr>
   <tr>
