@@ -3,22 +3,50 @@ import pandas as pd
 import io, os, re
 from email.message import EmailMessage
 import smtplib
-
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-# ===========================
-# ==== AYARLAR
-# ===========================
-st.set_page_config(page_title="Fuar E-Posta Gönderici", layout="wide")
-
+# =========================
+# Config
+# =========================
+st.set_page_config(page_title="Fair Mailer (BCC)", layout="wide")
 EXCEL_FILE_ID = "1IF6CN4oHEMk6IEE40ZGixPkfnNHLYXnQ"  # Drive'daki Excel ID
-LOCAL_FALLBACK = "D:/APP/temp.xlsx"   # Lokal yedek (opsiyonel)
+LOCAL_FALLBACK = "D:/APP/temp.xlsx"                   # Lokal fallback
+SHEET_NAME = "FuarMusteri"
 
-# ===========================
-# ==== GOOGLE DRIVE
-# ===========================
+FROM_EMAIL = "todo@sekeroglugroup.com"
+FROM_PASS  = "vbgvforwwbcpzhxf"  # Google App Password (SMTP)
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT_SSL = 465
+
+# =========================
+# Login (Boss only)
+# =========================
+USERS = {"Boss": "Seker12345!"}
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+def login_screen():
+    st.title("Fair Mailer (BCC)")
+    u = st.text_input("Username")
+    p = st.text_input("Password", type="password")
+    if st.button("Sign in"):
+        if u in USERS and p == USERS[u]:
+            st.session_state.user = u
+            st.rerun()
+        else:
+            st.error("Invalid credentials.")
+
+if not st.session_state.user:
+    login_screen()
+    st.stop()
+
+st.title("📧 Fair Mailer — BCC bulk sender")
+
+# =========================
+# Drive client
+# =========================
 @st.cache_resource
 def build_drive():
     creds = service_account.Credentials.from_service_account_info(
@@ -29,190 +57,146 @@ def build_drive():
 
 drive_svc = build_drive()
 
-def download_excel_file(file_id: str, local_path: str = "fuar_temp.xlsx") -> str | None:
+def download_excel_from_drive(file_id: str, to_path: str = "fuar_temp.xlsx") -> str | None:
     try:
         req = drive_svc.files().get_media(fileId=file_id)
-        with io.FileIO(local_path, "wb") as fh:
+        with io.FileIO(to_path, "wb") as fh:
             downloader = MediaIoBaseDownload(fh, req)
             done = False
             while not done:
                 status, done = downloader.next_chunk()
-        return local_path
+        return to_path
     except Exception as e:
-        st.warning(f"Drive'dan indirme başarısız: {e}")
+        st.warning(f"Could not download from Drive: {e}")
         return None
 
-# ===========================
-# ==== VERİYİ YÜKLE
-# ===========================
-st.title("🎫 Fuar E-Posta Gönderici")
-
-excel_path = download_excel_file(EXCEL_FILE_ID, "fuar_temp.xlsx")
-if (excel_path is None or not os.path.exists("fuar_temp.xlsx")) and os.path.exists(LOCAL_FALLBACK):
+# =========================
+# Load data
+# =========================
+excel_path = download_excel_from_drive(EXCEL_FILE_ID, "fuar_temp.xlsx")
+if excel_path is None or not os.path.exists(excel_path):
     excel_path = LOCAL_FALLBACK
-    st.info(f"Lokal dosya kullanılıyor: {excel_path}")
-
-if not excel_path or not os.path.exists(excel_path):
-    st.error("Excel dosyası bulunamadı. ID ve yetkileri kontrol edin.")
-    st.stop()
+    st.info(f"Using local fallback: {excel_path}")
 
 try:
-    # FuarMusteri sayfası: A sütunu = Fuar Adı, E sütunu = E-mail
-    df = pd.read_excel(excel_path, sheet_name="FuarMusteri")
+    df = pd.read_excel(excel_path, sheet_name=SHEET_NAME)
 except Exception as e:
-    st.error(f"FuarMusteri sayfası okunamadı: {e}")
+    st.error(f"Could not read sheet '{SHEET_NAME}': {e}")
     st.stop()
 
-# E-mail sütunu (E sütunu) ve fuar adı (A sütunu) esnek yakalama
-# Kullanıcı özelindeki kolon başlıkları farklı olabilir diye indeks bazlı da destekleyelim.
-def pick_col_by_index_or_name(frame: pd.DataFrame, idx: int, fallback_names: list[str]) -> pd.Series:
+# Beklenen kolonlar: A: Fuar Adı, E: E-mail
+# Esneklik için kolon adlarını indeksle de alalım:
+def get_col(df, idx, default_name):
     try:
-        s = frame.iloc[:, idx]
-        s.name = s.name or f"col_{idx}"
-        return s
-    except Exception:
-        for name in fallback_names:
-            if name in frame.columns:
-                return frame[name]
-        # Hiçbiri yoksa boş seri
-        return pd.Series(dtype=object)
+        return df.columns[idx]
+    except:
+        return default_name
 
-col_fuar = pick_col_by_index_or_name(df, 0, ["Fuar Adı", "FuarAdi", "Fuar"])
-col_mail = pick_col_by_index_or_name(df, 4, ["E-mail", "Email", "E posta", "E_posta", "E-Mail"])
+col_fuar = "Fuar Adı" if "Fuar Adı" in df.columns else get_col(df, 0, "Fuar Adı")
+col_email = "E-mail" if "E-mail" in df.columns else get_col(df, 4, "E-mail")
 
-# Temel tabloyu normalize et
-work = pd.DataFrame({
-    "Fuar Adı": col_fuar.astype(str).str.strip(),
-    "E-mail": col_mail.astype(str).str.strip(),
-})
-# Geçerli e-mail filtresi
-email_pat = r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$"
-work = work[work["E-mail"].str.match(email_pat, na=False)]
+# Fuar listesi
+fuar_list = sorted([str(x).strip() for x in df[col_fuar].dropna().unique() if str(x).strip() != ""])
+fuar = st.selectbox("Select Fair", fuar_list)
 
-fuar_list = sorted([x for x in work["Fuar Adı"].dropna().unique() if x])
-secili_fuar = st.selectbox("Fuar adı seçin", fuar_list, index=0 if fuar_list else None)
+# =========================
+# Email utilities
+# =========================
+EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
-if not fuar_list:
-    st.info("FuarMusteri sayfasında 'Fuar Adı' verisi bulunamadı.")
-    st.stop()
+def clean_emails(series) -> list[str]:
+    emails = []
+    for v in series.dropna():
+        s = str(v).strip()
+        if not s:
+            continue
+        # bir hücrede çoklu e-posta varsa ayıralım: ; , boşluk
+        parts = re.split(r"[;, \n]+", s)
+        for p in parts:
+            p = p.strip()
+            if p and EMAIL_REGEX.match(p):
+                emails.append(p)
+    # unique, orijinal sırayı mümkün olduğunca koru
+    seen = set()
+    uniq = []
+    for e in emails:
+        if e.lower() not in seen:
+            uniq.append(e)
+            seen.add(e.lower())
+    return uniq
 
-filtered = work[work["Fuar Adı"] == secili_fuar].copy()
-alici_listesi = sorted(filtered["E-mail"].dropna().unique().tolist())
+# =========================
+# Filter by fair & build recipient list
+# =========================
+rec_df = df[df[col_fuar].astype(str).str.strip() == fuar] if fuar else df.iloc[0:0]
+recipients = clean_emails(rec_df[col_email]) if not rec_df.empty else []
 
-st.markdown(f"*Seçilen fuar:* {secili_fuar}")
-st.markdown(f"*Alıcı sayısı:* {len(alici_listesi)}")
+st.markdown(f"*Selected fair:* {fuar}")
+st.write(f"Recipients found: *{len(recipients)}*")
+if recipients:
+    st.dataframe(pd.DataFrame({"Recipients (BCC)": recipients}), use_container_width=True, height=210)
+else:
+    st.info("No recipients for this fair.")
 
-with st.expander("Alıcıları Göster"):
-    st.write(pd.DataFrame({"E-mail": alici_listesi}))
-
-# ===========================
-# ==== E-POSTA GÖNDERİM ARAYÜZÜ
-# ===========================
-st.markdown("---")
-st.subheader("E-posta İçeriği")
-
-varsayilan_konu = f"{secili_fuar} Hakkında Bilgilendirme"
-varsayilan_govde = (
-    f"Merhaba,\n\n{secili_fuar} kapsamında görüştüğümüz için teşekkür ederiz. "
-    "Aşağıda ürün ve hizmetlerimize dair kısa bilgileri bulabilirsiniz.\n\n"
-    "Sorularınız için bu e-posta üzerinden bize dönebilirsiniz.\n\nSaygılarımızla,\nŞekeroğlu İhracat"
+# =========================
+# Compose
+# =========================
+default_subject = f"Thank you for visiting us at {fuar}"
+default_body = (
+    f"Dear Partner,\n\n"
+    f"It was a pleasure meeting you at {fuar}. Please find attached our materials.\n\n"
+    f"Best regards,\n"
+    f"Sekeroglu Export Team"
 )
 
-kol1, kol2 = st.columns(2)
-with kol1:
-    konu = st.text_input("Konu", value=varsayilan_konu)
-with kol2:
-    gonderici_isim = st.text_input("Gönderici Adı", value="Şekeroğlu İhracat")
+st.subheader("Compose Email")
+subject = st.text_input("Subject (English only)", value=default_subject)
+body = st.text_area("Body (English only)", value=default_body, height=220)
 
-govde = st.text_area("Mesaj", value=varsayilan_govde, height=220)
+st.subheader("Attachments (optional)")
+files = st.file_uploader("Select one or more files to attach", type=None, accept_multiple_files=True)
 
-tek_tek_gonder = st.checkbox("Alıcılara tek tek gönder (önerilir)", value=True)
-test_modu = st.checkbox("Önce test olarak sadece bana gönder", value=False)
-test_mail = st.text_input("Test mail adresi", value="")
+# =========================
+# Send
+# =========================
+colA, colB = st.columns([1,1])
+with colA:
+    confirm = st.checkbox(f"I confirm to send to {len(recipients)} recipients via BCC.", value=False)
+with colB:
+    send_btn = st.button("Send Email", type="primary", use_container_width=True)
 
-st.markdown("*Gönderim ayarları* st.secrets['smtp'] içinde tanımlanmalıdır:")
-st.code(
-    """# .streamlit/secrets.toml
-[gcp_service_account]
-# ... service account JSON içeriği ...
-
-[smtp]
-from_email = "todo@sekeroglugroup.com"
-password   = "uygulama_şifresi_veya_smtp_parolası"
-host       = "smtp.gmail.com"
-port       = 465
-""",
-    language="toml"
-)
-
-def send_email(to_addr: str, subject: str, body: str, from_email: str, password: str, host: str, port: int, sender_name: str | None = None):
+def send_bcc_email(from_email: str, password: str, subject: str, body: str, bcc_list: list[str], attachments=None):
     msg = EmailMessage()
-    frm = f"{sender_name} <{from_email}>" if sender_name else from_email
     msg["Subject"] = subject
-    msg["From"] = frm
-    msg["To"] = to_addr
+    msg["From"] = from_email
+    msg["To"] = from_email               # BCC gönderimde To kendimiz olsun
+    # BCC list normal header'a eklenmez; SMTP çağrısında ayrı verilir.
     msg.set_content(body)
 
-    with smtplib.SMTP_SSL(host, port) as smtp:
+    # Attachments
+    if attachments:
+        for f in attachments:
+            data = f.read()
+            fname = f.name
+            maintype = "application"
+            subtype = "octet-stream"
+            # İçerik türünü Streamlit'ten alamadığımız için generic ekliyoruz
+            msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=fname)
+
+    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT_SSL) as smtp:
         smtp.login(from_email, password)
-        smtp.send_message(msg)
+        smtp.sendmail(from_email, [from_email] + bcc_list, msg.as_string())
 
-def get_smtp_secrets():
-    try:
-        cfg = st.secrets["smtp"]
-        from_email = cfg.get("from_email")
-        password = cfg.get("password")
-        host = cfg.get("host", "smtp.gmail.com")
-        port = int(cfg.get("port", 465))
-        if not from_email or not password:
-            raise KeyError("from_email / password eksik.")
-        return from_email, password, host, port
-    except Exception as e:
-        st.error(f"SMTP ayarları eksik veya hatalı: {e}")
-        return None
-
-st.markdown("---")
-gonder_btn = st.button("📨 E-postaları Gönder", type="primary", disabled=(len(alici_listesi) == 0))
-
-if gonder_btn:
-    if not konu.strip() or not govde.strip():
-        st.error("Konu ve mesaj boş olamaz.")
+if send_btn:
+    if not recipients:
+        st.error("No recipients to send.")
+    elif not subject.strip() or not body.strip():
+        st.error("Subject and Body are required.")
+    elif not confirm:
+        st.warning("Please confirm before sending.")
     else:
-        smtp_cfg = get_smtp_secrets()
-        if smtp_cfg is None:
-            st.stop()
-        from_email, password, host, port = smtp_cfg
-
         try:
-            if test_modu:
-                if not test_mail or not re.match(email_pat, test_mail):
-                    st.error("Geçerli bir test mail adresi girin.")
-                    st.stop()
-                send_email(test_mail, konu, govde, from_email, password, host, port, gonderici_isim)
-                st.success(f"✅ Test e-postası gönderildi: {test_mail}")
-            else:
-                if tek_tek_gonder:
-                    basarili, hatali = 0, 0
-                    for addr in alici_listesi:
-                        try:
-                            send_email(addr, konu, govde, from_email, password, host, port, gonderici_isim)
-                            basarili += 1
-                        except Exception:
-                            hatali += 1
-                    st.success(f"✅ Gönderim tamamlandı. Başarılı: {basarili}, Hatalı: {hatali}")
-                else:
-                    # Tek e-postada BCC ile
-                    msg = EmailMessage()
-                    frm = f"{gonderici_isim} <{from_email}>" if gonderici_isim else from_email
-                    msg["Subject"] = konu
-                    msg["From"] = frm
-                    # 'To' alanına kendinizi koyun, alıcıları BCC yapalım
-                    msg["To"] = from_email
-                    msg["Bcc"] = ", ".join(alici_listesi)
-                    msg.set_content(govde)
-                    with smtplib.SMTP_SSL(host, port) as smtp:
-                        smtp.login(from_email, password)
-                        smtp.send_message(msg)
-                    st.success(f"✅ Tek mail + BCC ile gönderildi. Alıcı sayısı: {len(alici_listesi)}")
+            send_bcc_email(FROM_EMAIL, FROM_PASS, subject, body, recipients, attachments=files)
+            st.success(f"Email sent successfully to {len(recipients)} recipients (BCC).")
         except Exception as e:
-            st.error(f"Gönderim hatası: {e}")
+            st.error(f"Send failed: {e}")
