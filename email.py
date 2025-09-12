@@ -1,7 +1,7 @@
 # fuar_mailer.py
 import streamlit as st
 import pandas as pd
-import io, os, re, mimetypes
+import io, os, re
 from email.message import EmailMessage
 import smtplib
 from google.oauth2 import service_account
@@ -11,19 +11,15 @@ from googleapiclient.http import MediaIoBaseDownload
 # =========================
 # Config
 # =========================
-st.set_page_config(page_title="Fair Mailer (BCC) + Signature", layout="wide")
-
-EXCEL_FILE_ID = "1IF6CN4oHEMk6IEE40ZGixPkfnNHLYXnQ"   # Drive Excel ID
-LOCAL_FALLBACK = "D:/APP/temp.xlsx"                    # Local fallback
+st.set_page_config(page_title="Fair Mailer (BCC)", layout="wide")
+EXCEL_FILE_ID = "1IF6CN4oHEMk6IEE40ZGixPkfnNHLYXnQ"  # Drive Excel ID
+LOCAL_FALLBACK = "D:/APP/temp.xlsx"
 SHEET_NAME = "FuarMusteri"
 
 FROM_EMAIL = "todo@sekeroglugroup.com"
-FROM_PASS  = "vbgvforwwbcpzhxf"  # Gmail App Password
+FROM_PASS  = "vbgvforwwbcpzhxf"  # Google App Password
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT_SSL = 465
-
-# Yeni şirket logosu
-LOGO_URL = "https://www.sekeroglugroup.com/storage/settings/xdp5r6DZIFJMNGOStqwvKCiVHDhYxA84jFr61TNp.svg"
 
 # =========================
 # Login (Boss only)
@@ -89,7 +85,7 @@ except Exception as e:
     st.error(f"Could not read sheet '{SHEET_NAME}': {e}")
     st.stop()
 
-# Beklenen kolonlar: A: Fuar Adı, E: E-mail (esnek okuma)
+# Beklenen kolonlar: A: Fuar Adı, E: E-mail
 def get_col(df, idx, default_name):
     try:
         return df.columns[idx]
@@ -97,8 +93,9 @@ def get_col(df, idx, default_name):
         return default_name
 
 col_fuar = "Fuar Adı" if "Fuar Adı" in df.columns else get_col(df, 0, "Fuar Adı")
-col_email = "E-mail"  if "E-mail"  in df.columns else get_col(df, 4, "E-mail")
+col_email = "E-mail" if "E-mail" in df.columns else get_col(df, 4, "E-mail")
 
+# Fuar listesi
 fuar_list = sorted([str(x).strip() for x in df[col_fuar].dropna().unique() if str(x).strip() != ""])
 fuar = st.selectbox("Select Fair", fuar_list)
 
@@ -118,16 +115,16 @@ def clean_emails(series) -> list[str]:
             p = p.strip()
             if p and EMAIL_REGEX.match(p):
                 emails.append(p)
-    seen, uniq = set(), []
+    seen = set()
+    uniq = []
     for e in emails:
-        k = e.lower()
-        if k not in seen:
+        if e.lower() not in seen:
             uniq.append(e)
-            seen.add(k)
+            seen.add(e.lower())
     return uniq
 
 # =========================
-# Filter by fair & recipients
+# Filter recipients
 # =========================
 rec_df = df[df[col_fuar].astype(str).str.strip() == fuar] if fuar else df.iloc[0:0]
 recipients = clean_emails(rec_df[col_email]) if not rec_df.empty else []
@@ -140,36 +137,11 @@ else:
     st.info("No recipients for this fair.")
 
 # =========================
-# Compose
-# =========================
-default_subject = f"Thank you for visiting us at {fuar}"
-default_body = (
-    f"Dear Partner,\n\n"
-    f"It was a pleasure meeting you at {fuar}. Please find attached our materials.\n\n"
-    f"Best regards,\n"
-    f"Sekeroglu Export Team"
-)
-
-st.subheader("Compose Email")
-subject = st.text_input("Subject (English only)", value=default_subject)
-body_text = st.text_area("Body (English only)", value=default_body, height=220)
-
-include_signature = st.checkbox("Include HTML signature", value=True)
-
-st.subheader("Attachments (optional)")
-files = st.file_uploader("Select one or more files to attach", type=None, accept_multiple_files=True)
-
-# =========================
-# HTML signature block
+# Signature
 # =========================
 def html_signature() -> str:
-    return f"""
+    return """
 <table cellpadding="0" cellspacing="0" style="font-family:Arial,Helvetica,sans-serif; font-size:13px; color:#222;">
-  <tr>
-    <td style="padding:10px 0;">
-      <img src="{LOGO_URL}" alt="Şekeroğlu A.Ş." style="width:189px; height:38px; display:block;">
-    </td>
-  </tr>
   <tr>
     <td style="padding:4px 0 0 0;">
       <div style="font-weight:bold; font-size:16px; color:#0b6e4f;">Huseyin POLAT</div>
@@ -180,8 +152,8 @@ def html_signature() -> str:
   <tr>
     <td style="line-height:1.5;">
       <div>📞 +90 531 765 69 60</div>
-      <div>☎️  +90 850 420 27 00</div>
-      <div>✉️  <a href="mailto:export1@sekeroglugroup.com" style="color:#0b6e4f; text-decoration:none;">export1@sekeroglugroup.com</a></div>
+      <div>☎️ +90 850 420 27 00</div>
+      <div>✉️ <a href="mailto:export1@sekeroglugroup.com" style="color:#0b6e4f; text-decoration:none;">export1@sekeroglugroup.com</a></div>
       <div>🌐 <a href="https://www.sekeroglugroup.com" style="color:#0b6e4f; text-decoration:none;">www.sekeroglugroup.com</a></div>
     </td>
   </tr>
@@ -202,24 +174,36 @@ def html_signature() -> str:
     </td>
   </tr>
 </table>
-"""
+""".strip()
 
-def build_html_email(body_plain: str, add_signature: bool) -> str:
-    safe = (
-        body_plain
-        .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        .replace("\n", "<br>")
+def text_signature() -> str:
+    return (
+        "Huseyin POLAT\n"
+        "Export Sales Representative\n"
+        "Phone: +90 531 765 69 60 | +90 850 420 27 00\n"
+        "Email: export1@sekeroglugroup.com\n"
+        "Web: www.sekeroglugroup.com\n"
+        "Şekeroğlu A.Ş.\n"
+        "Sanayi Mah. 60129 Nolu Cad. No:7 27110 Şehitkamil / Gaziantep\n"
     )
-    sig = html_signature() if add_signature else ""
-    divider = '<hr style="border:none;border-top:1px solid #e5e5e5;margin:18px 0;">' if add_signature else ""
-    html = f"""
-<div style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#222; line-height:1.6;">
-  {safe}
-  {divider}
-  {sig}
-</div>
-"""
-    return html
+
+# =========================
+# Compose
+# =========================
+default_subject = f"Thank you for visiting us at {fuar}"
+default_body = (
+    f"Dear Partner,\n\n"
+    f"It was a pleasure meeting you at {fuar}. Please find attached our materials.\n\n"
+    f"Best regards,\n"
+    f"Sekeroglu Export Team"
+)
+
+st.subheader("Compose Email")
+subject = st.text_input("Subject (English only)", value=default_subject)
+body = st.text_area("Body (English only)", value=default_body, height=220)
+
+st.subheader("Attachments (optional)")
+files = st.file_uploader("Select one or more files to attach", type=None, accept_multiple_files=True)
 
 # =========================
 # Send
@@ -230,26 +214,31 @@ with colA:
 with colB:
     send_btn = st.button("Send Email", type="primary", use_container_width=True)
 
-def send_bcc_email(from_email: str, password: str, subject: str, body_plain: str, body_html: str,
-                   bcc_list: list[str], attachments=None):
+def send_bcc_email(from_email: str, password: str, subject: str, body: str, bcc_list: list[str], attachments=None):
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = from_email
-    msg["To"] = from_email  # BCC teslim için To kendimize
+    msg["To"] = from_email
 
-    msg.set_content(body_plain)
+    # Plain text + HTML
+    body_text = f"{body}\n\n{text_signature()}"
+    msg.set_content(body_text)
+
+    body_html = f"""
+    <div style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#222; line-height:1.5;">
+      {body.replace('\n', '<br>')}
+      <br><br>
+      {html_signature()}
+    </div>
+    """
     msg.add_alternative(body_html, subtype="html")
 
+    # Attachments
     if attachments:
         for f in attachments:
             data = f.read()
             fname = f.name
-            ctype, _ = mimetypes.guess_type(fname)
-            if ctype is None:
-                maintype, subtype = "application", "octet-stream"
-            else:
-                maintype, subtype = ctype.split("/", 1)
-            msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=fname)
+            msg.add_attachment(data, maintype="application", subtype="octet-stream", filename=fname)
 
     with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT_SSL) as smtp:
         smtp.login(from_email, password)
@@ -258,14 +247,13 @@ def send_bcc_email(from_email: str, password: str, subject: str, body_plain: str
 if send_btn:
     if not recipients:
         st.error("No recipients to send.")
-    elif not subject.strip() or not body_text.strip():
+    elif not subject.strip() or not body.strip():
         st.error("Subject and Body are required.")
     elif not confirm:
         st.warning("Please confirm before sending.")
     else:
         try:
-            html_body = build_html_email(body_text, include_signature)
-            send_bcc_email(FROM_EMAIL, FROM_PASS, subject, body_text, html_body, recipients, attachments=files)
+            send_bcc_email(FROM_EMAIL, FROM_PASS, subject, body, recipients, attachments=files)
             st.success(f"Email sent successfully to {len(recipients)} recipients (BCC).")
         except Exception as e:
             st.error(f"Send failed: {e}")
