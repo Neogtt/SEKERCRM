@@ -22,9 +22,8 @@ FROM_PASS  = "vbgvforwwbcpzhxf"  # Gmail App Password
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT_SSL = 465
 
-# Şirket logosu (harici URL)
-LOGO_URL = "https://i.imgur.com/8jv6m9i.png"  # <- burada önce kullandığınız logo linkini bırakıyorum
-# (İstersen bu URL’yi kendi CDN/Drive paylaşım linkinle değiştir.)
+# Yeni şirket logosu
+LOGO_URL = "https://www.sekeroglugroup.com/storage/settings/xdp5r6DZIFJMNGOStqwvKCiVHDhYxA84jFr61TNp.svg"
 
 # =========================
 # Login (Boss only)
@@ -164,7 +163,6 @@ files = st.file_uploader("Select one or more files to attach", type=None, accept
 # HTML signature block
 # =========================
 def html_signature() -> str:
-    # Logo genişliği mobil uyum için % yerine px kullandım; mail istemcileri daha uyumlu işler.
     return f"""
 <table cellpadding="0" cellspacing="0" style="font-family:Arial,Helvetica,sans-serif; font-size:13px; color:#222;">
   <tr>
@@ -207,7 +205,6 @@ def html_signature() -> str:
 """
 
 def build_html_email(body_plain: str, add_signature: bool) -> str:
-    # Kullanıcı gövdesindeki satır sonlarını <br>’e çevir.
     safe = (
         body_plain
         .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -240,11 +237,9 @@ def send_bcc_email(from_email: str, password: str, subject: str, body_plain: str
     msg["From"] = from_email
     msg["To"] = from_email  # BCC teslim için To kendimize
 
-    # Çoklu format: plain + HTML (imzalı)
     msg.set_content(body_plain)
     msg.add_alternative(body_html, subtype="html")
 
-    # Ekler
     if attachments:
         for f in attachments:
             data = f.read()
@@ -258,7 +253,6 @@ def send_bcc_email(from_email: str, password: str, subject: str, body_plain: str
 
     with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT_SSL) as smtp:
         smtp.login(from_email, password)
-        # BCC: header’a yazmıyoruz; envelope listesine ekliyoruz
         smtp.sendmail(from_email, [from_email] + bcc_list, msg.as_string())
 
 if send_btn:
