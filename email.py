@@ -1,202 +1,231 @@
+# email_app.py
 import streamlit as st
 import pandas as pd
-import io, os, re
-from email.message import EmailMessage
+import io, os
 import smtplib
+from pathlib import Path
+from email.message import EmailMessage
+from email.utils import make_msgid
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-# =========================
-# Config
-# =========================
-st.set_page_config(page_title="Fair Mailer (BCC)", layout="wide")
-EXCEL_FILE_ID = "1IF6CN4oHEMk6IEE40ZGixPkfnNHLYXnQ"  # Drive'daki Excel ID
-LOCAL_FALLBACK = "D:/APP/temp.xlsx"                   # Lokal fallback
-SHEET_NAME = "FuarMusteri"
+# ===========================
+# ==== APP CONFIG
+# ===========================
+st.set_page_config(page_title="ŞEKEROĞLU • Fair Mailer", layout="wide")
 
-FROM_EMAIL = "todo@sekeroglugroup.com"
-FROM_PASS  = "vbgvforwwbcpzhxf"  # Google App Password (SMTP)
-SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT_SSL = 465
+# ---- Drive'daki Excel ve lokal yedek
+EXCEL_FILE_ID = "1IF6CN4oHEMk6IEE40ZGixPkfnNHLYXnQ"  # Google Drive'daki Excel (aynı dosyayı CRM'inizde kullanıyorsunuz)
+LOCAL_FILE    = "D:/APP/temp.xlsx"                    # Lokal yedek (Drive erişilemezse)
 
-# =========================
-# Login (Boss only)
-# =========================
-USERS = {"Boss": "Seker12345!"}
-if "user" not in st.session_state:
-    st.session_state.user = None
+# ---- Gönderici bilgileri
+SMTP_HOST     = "smtp.gmail.com"
+SMTP_PORT     = 465
+FROM_EMAIL    = "export1@sekeroglugroup.com"
+FROM_PASSWORD = "vbgvforwwbcpzhxf"   # Gmail App Password (talebiniz üzerine koda gömüldü)
 
-def login_screen():
-    st.title("Fair Mailer (BCC)")
-    u = st.text_input("Username")
-    p = st.text_input("Password", type="password")
-    if st.button("Sign in"):
-        if u in USERS and p == USERS[u]:
-            st.session_state.user = u
-            st.rerun()
-        else:
-            st.error("Invalid credentials.")
-
-if not st.session_state.user:
-    login_screen()
-    st.stop()
-
-st.title("📧 Fair Mailer — BCC bulk sender")
-
-# =========================
-# Drive client
-# =========================
+# ===========================
+# ==== GOOGLE DRIVE HELPER
+# ===========================
 @st.cache_resource
 def build_drive():
+    """Service Account ile Drive istemcisi oluşturur."""
     creds = service_account.Credentials.from_service_account_info(
         st.secrets["gcp_service_account"],
         scopes=["https://www.googleapis.com/auth/drive.readonly"]
     )
     return build("drive", "v3", credentials=creds, cache_discovery=False)
 
-drive_svc = build_drive()
-
-def download_excel_from_drive(file_id: str, to_path: str = "fuar_temp.xlsx") -> str | None:
+def download_excel_from_drive(file_id: str, out_path: str) -> bool:
+    """Drive'dan Excel indirir; başarıyla indirilirse True döner."""
     try:
-        req = drive_svc.files().get_media(fileId=file_id)
-        with io.FileIO(to_path, "wb") as fh:
+        svc = build_drive()
+        req = svc.files().get_media(fileId=file_id)
+        with io.FileIO(out_path, "wb") as fh:
             downloader = MediaIoBaseDownload(fh, req)
             done = False
             while not done:
                 status, done = downloader.next_chunk()
-        return to_path
+        return True
     except Exception as e:
-        st.warning(f"Could not download from Drive: {e}")
-        return None
+        st.warning(f"Drive download failed, using local file if present. ({e})")
+        return False
 
-# =========================
-# Load data
-# =========================
-excel_path = download_excel_from_drive(EXCEL_FILE_ID, "fuar_temp.xlsx")
-if excel_path is None or not os.path.exists(excel_path):
-    excel_path = LOCAL_FALLBACK
-    st.info(f"Using local fallback: {excel_path}")
+# ===========================
+# ==== DATA LOAD
+# ===========================
+def load_fuar_sheet() -> pd.DataFrame:
+    tmp_path = "fuar_temp.xlsx"
+    ok = download_excel_from_drive(EXCEL_FILE_ID, tmp_path)
+    use_path = tmp_path if ok and os.path.exists(tmp_path) else LOCAL_FILE
 
-try:
-    df = pd.read_excel(excel_path, sheet_name=SHEET_NAME)
-except Exception as e:
-    st.error(f"Could not read sheet '{SHEET_NAME}': {e}")
-    st.stop()
+    if not os.path.exists(use_path):
+        st.error("Neither Drive file nor local fallback could be loaded.")
+        return pd.DataFrame()
 
-# Beklenen kolonlar: A: Fuar Adı, E: E-mail
-# Esneklik için kolon adlarını indeksle de alalım:
-def get_col(df, idx, default_name):
     try:
-        return df.columns[idx]
-    except:
-        return default_name
+        df = pd.read_excel(use_path, sheet_name="FuarMusteri")
+    except Exception as e:
+        st.error(f"Couldn't read 'FuarMusteri' sheet: {e}")
+        return pd.DataFrame()
 
-col_fuar = "Fuar Adı" if "Fuar Adı" in df.columns else get_col(df, 0, "Fuar Adı")
-col_email = "E-mail" if "E-mail" in df.columns else get_col(df, 4, "E-mail")
+    # Beklenen sütunlar: A=Fuar Adı, E=E-mail (diğerleri opsiyonel)
+    # Sütun adları değişik olabilir; güvenli şekilde adresi E sütunu olarak alalım:
+    if df.shape[1] >= 5:
+        if "E-mail" not in df.columns:
+            df.rename(columns={df.columns[4]: "E-mail"}, inplace=True)
+        if "Fuar Adı" not in df.columns:
+            df.rename(columns={df.columns[0]: "Fuar Adı"}, inplace=True)
 
-# Fuar listesi
-fuar_list = sorted([str(x).strip() for x in df[col_fuar].dropna().unique() if str(x).strip() != ""])
-fuar = st.selectbox("Select Fair", fuar_list)
+    # Email ve fuar adı boş/NaN olanları ayıkla
+    df["E-mail"] = df["E-mail"].astype(str).str.strip()
+    df["Fuar Adı"] = df["Fuar Adı"].astype(str).str.strip()
+    df = df[(df["E-mail"] != "") & (df["Fuar Adı"] != "")]
+    return df
 
-# =========================
-# Email utilities
-# =========================
-EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+df_fuar = load_fuar_sheet()
 
-def clean_emails(series) -> list[str]:
-    emails = []
-    for v in series.dropna():
-        s = str(v).strip()
-        if not s:
-            continue
-        # bir hücrede çoklu e-posta varsa ayıralım: ; , boşluk
-        parts = re.split(r"[;, \n]+", s)
-        for p in parts:
-            p = p.strip()
-            if p and EMAIL_REGEX.match(p):
-                emails.append(p)
-    # unique, orijinal sırayı mümkün olduğunca koru
-    seen = set()
-    uniq = []
-    for e in emails:
-        if e.lower() not in seen:
-            uniq.append(e)
-            seen.add(e.lower())
-    return uniq
+# ===========================
+# ==== SIGNATURE (H. POLAT)
+# ===========================
+def build_signature_html() -> tuple[str, str | None]:
+    """
+    Hüseyin Polat imzası (HTML). Eğer logo.png varsa inline CID döner.
+    return: (html, logo_cid_without_brackets_or_None)
+    """
+    logo_path = Path("logo.png")
+    logo_cid = make_msgid() if logo_path.exists() else None
+    logo_cid_trim = logo_cid[1:-1] if logo_cid else None
 
-# =========================
-# Filter by fair & build recipient list
-# =========================
-rec_df = df[df[col_fuar].astype(str).str.strip() == fuar] if fuar else df.iloc[0:0]
-recipients = clean_emails(rec_df[col_email]) if not rec_df.empty else []
+    logo_img_html = f'<img src="cid:{logo_cid_trim}" alt="Şekeroğlu A.Ş." style="width:180px;"><br><br>' if logo_cid_trim else ""
 
-st.markdown(f"*Selected fair:* {fuar}")
-st.write(f"Recipients found: *{len(recipients)}*")
-if recipients:
-    st.dataframe(pd.DataFrame({"Recipients (BCC)": recipients}), use_container_width=True, height=210)
-else:
-    st.info("No recipients for this fair.")
+    html = f"""
+    <br><br>
+    <div style="font-family: Arial, sans-serif; font-size: 12px; color: #333;">
+        {logo_img_html}
+        <b style="color:#97B900; font-size:14px;">Huseyin POLAT</b><br>
+        Export Sales Representative<br><br>
+        📞 +90 531 765 69 60<br>
+        ☎️ +90 850 420 27 00<br>
+        ✉️ <a href="mailto:export1@sekeroglugroup.com">export1@sekeroglugroup.com</a><br>
+        🌐 <a href="https://www.sekeroglugroup.com">www.sekeroglugroup.com</a><br><br>
+        <b style="color:#97B900;">Şekeroğlu A.Ş.</b><br>
+        Sanayi Mah. 60129 Nolu Cad. No:7 27110 Şehitkamil / Gaziantep<br><br>
+        <small style="color:gray;">
+          This email and its contents are confidential and intended only for the recipient.
+          Unauthorized sharing or disclosure is strictly prohibited. If you received this message in error,
+          please delete it immediately.
+        </small>
+    </div>
+    """
+    return html, logo_cid_trim
 
-# =========================
-# Compose
-# =========================
-default_subject = f"Thank you for visiting us at {fuar}"
-default_body = (
-    f"Dear Partner,\n\n"
-    f"It was a pleasure meeting you at {fuar}. Please find attached our materials.\n\n"
-    f"Best regards,\n"
-    f"Sekeroglu Export Team"
-)
-
-st.subheader("Compose Email")
-subject = st.text_input("Subject (English only)", value=default_subject)
-body = st.text_area("Body (English only)", value=default_body, height=220)
-
-st.subheader("Attachments (optional)")
-files = st.file_uploader("Select one or more files to attach", type=None, accept_multiple_files=True)
-
-# =========================
-# Send
-# =========================
-colA, colB = st.columns([1,1])
-with colA:
-    confirm = st.checkbox(f"I confirm to send to {len(recipients)} recipients via BCC.", value=False)
-with colB:
-    send_btn = st.button("Send Email", type="primary", use_container_width=True)
-
-def send_bcc_email(from_email: str, password: str, subject: str, body: str, bcc_list: list[str], attachments=None):
+# ===========================
+# ==== SMTP SEND
+# ===========================
+def send_one_email(to_addr: str, bcc_list: list[str], subject: str, body_html: str, attachments: list[bytes], attachment_names: list[str], logo_cid: str | None):
     msg = EmailMessage()
+    msg["From"] = FROM_EMAIL
+    msg["To"] = to_addr
+    if bcc_list:
+        msg["Bcc"] = ", ".join(bcc_list)
     msg["Subject"] = subject
-    msg["From"] = from_email
-    msg["To"] = from_email               # BCC gönderimde To kendimiz olsun
-    # BCC list normal header'a eklenmez; SMTP çağrısında ayrı verilir.
-    msg.set_content(body)
+    msg.set_content(body_html, subtype="html")
+
+    # Inline logo
+    logo_path = Path("logo.png")
+    if logo_cid and logo_path.exists():
+        with open(logo_path, "rb") as img:
+            msg.get_payload()[0].add_related(img.read(), maintype="image", subtype="png", cid=f"<{logo_cid}>")
 
     # Attachments
-    if attachments:
-        for f in attachments:
-            data = f.read()
-            fname = f.name
-            maintype = "application"
-            subtype = "octet-stream"
-            # İçerik türünü Streamlit'ten alamadığımız için generic ekliyoruz
-            msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=fname)
+    for data, name in zip(attachments, attachment_names):
+        msg.add_attachment(data, maintype="application", subtype="octet-stream", filename=name)
 
-    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT_SSL) as smtp:
-        smtp.login(from_email, password)
-        smtp.sendmail(from_email, [from_email] + bcc_list, msg.as_string())
+    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as smtp:
+        smtp.login(FROM_EMAIL, FROM_PASSWORD)
+        smtp.send_message(msg)
+
+# ===========================
+# ==== UI
+# ===========================
+st.title("✉️ Şekeroğlu • Fair Email Sender")
+
+if df_fuar.empty:
+    st.stop()
+
+# Fuar seçimi
+fuarlar = sorted(df_fuar["Fuar Adı"].dropna().unique().tolist())
+colA, colB = st.columns([2, 3])
+with colA:
+    fuar_sec = st.selectbox("Select a Fair (Fuar Adı):", fuarlar, index=0 if fuarlar else None)
+
+filtered = df_fuar[df_fuar["Fuar Adı"] == fuar_sec].copy() if fuarlar else pd.DataFrame()
+emails = sorted(filtered["E-mail"].dropna().unique().tolist())
+
+with colB:
+    st.markdown(f"**Recipients for '{fuar_sec}':** {len(emails)}")
+
+st.dataframe(pd.DataFrame({"Recipients": emails}), use_container_width=True, height=240)
+
+st.markdown("---")
+
+# Mail içeriği
+subject = st.text_input("Subject (English only):", value="Follow-up from Şekeroğlu A.Ş. – Thank you for visiting our booth")
+default_body = (
+    "Dear Partner,<br><br>"
+    "Thank you for visiting our booth during the fair. We would be pleased to support your inquiries regarding our products and pricing.<br><br>"
+    "Please feel free to reply to this email for any questions.<br><br>"
+    "Best regards,"
+)
+body = st.text_area("Message (HTML allowed, English only):", value=default_body, height=220)
+
+# BCC
+bcc_text = st.text_input("BCC (comma separated):", value="export1@sekeroglugroup.com")
+
+# Ekler
+uploaded_files = st.file_uploader("Attachments (any file type, multiple allowed)", type=None, accept_multiple_files=True)
+
+# Gönder
+send_btn = st.button("🚀 Send Emails")
 
 if send_btn:
-    if not recipients:
-        st.error("No recipients to send.")
+    if not emails:
+        st.error("No recipients found for the selected fair.")
     elif not subject.strip() or not body.strip():
-        st.error("Subject and Body are required.")
-    elif not confirm:
-        st.warning("Please confirm before sending.")
+        st.error("Subject and message cannot be empty.")
     else:
-        try:
-            send_bcc_email(FROM_EMAIL, FROM_PASS, subject, body, recipients, attachments=files)
-            st.success(f"Email sent successfully to {len(recipients)} recipients (BCC).")
-        except Exception as e:
-            st.error(f"Send failed: {e}")
+        signature_html, logo_cid = build_signature_html()
+        final_body = body + signature_html
+
+        # Prepare attachments
+        attachments_data = []
+        attachment_names = []
+        if uploaded_files:
+            for uf in uploaded_files:
+                attachments_data.append(uf.getvalue())
+                attachment_names.append(uf.name)
+
+        bcc_list = [e.strip() for e in bcc_text.split(",") if e.strip()]
+
+        success, fail = 0, 0
+        for addr in emails:
+            try:
+                send_one_email(
+                    to_addr=addr,
+                    bcc_list=bcc_list,
+                    subject=subject.strip(),
+                    body_html=final_body,
+                    attachments=attachments_data,
+                    attachment_names=attachment_names,
+                    logo_cid=logo_cid
+                )
+                success += 1
+            except Exception as e:
+                st.write(f"❌ {addr}: {e}")
+                fail += 1
+
+        st.success(f"Done. Sent: {success} | Failed: {fail}")
+        if success:
+            st.info("Tip: To improve deliverability, avoid very large attachments and consider sending in batches if the list is big.")
