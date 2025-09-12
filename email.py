@@ -1,7 +1,7 @@
 # fuar_mailer.py
 import streamlit as st
 import pandas as pd
-import io, os, re
+import io, os, re, mimetypes
 from email.message import EmailMessage
 import smtplib
 from google.oauth2 import service_account
@@ -11,15 +11,20 @@ from googleapiclient.http import MediaIoBaseDownload
 # =========================
 # Config
 # =========================
-st.set_page_config(page_title="Fair Mailer (BCC)", layout="wide")
-EXCEL_FILE_ID = "1IF6CN4oHEMk6IEE40ZGixPkfnNHLYXnQ"  # Drive'daki Excel ID
-LOCAL_FALLBACK = "D:/APP/temp.xlsx"                   # Lokal fallback
+st.set_page_config(page_title="Fair Mailer (BCC) + Signature", layout="wide")
+
+EXCEL_FILE_ID = "1IF6CN4oHEMk6IEE40ZGixPkfnNHLYXnQ"   # Drive Excel ID
+LOCAL_FALLBACK = "D:/APP/temp.xlsx"                    # Local fallback
 SHEET_NAME = "FuarMusteri"
 
 FROM_EMAIL = "todo@sekeroglugroup.com"
-FROM_PASS  = "vbgvforwwbcpzhxf"  # Google App Password (SMTP)
+FROM_PASS  = "vbgvforwwbcpzhxf"  # Gmail App Password
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT_SSL = 465
+
+# Şirket logosu (harici URL)
+LOGO_URL = "https://i.imgur.com/8jv6m9i.png"  # <- burada önce kullandığınız logo linkini bırakıyorum
+# (İstersen bu URL’yi kendi CDN/Drive paylaşım linkinle değiştir.)
 
 # =========================
 # Login (Boss only)
@@ -85,8 +90,7 @@ except Exception as e:
     st.error(f"Could not read sheet '{SHEET_NAME}': {e}")
     st.stop()
 
-# Beklenen kolonlar: A: Fuar Adı, E: E-mail
-# Esneklik için kolon adlarını indeksle de alalım:
+# Beklenen kolonlar: A: Fuar Adı, E: E-mail (esnek okuma)
 def get_col(df, idx, default_name):
     try:
         return df.columns[idx]
@@ -94,9 +98,8 @@ def get_col(df, idx, default_name):
         return default_name
 
 col_fuar = "Fuar Adı" if "Fuar Adı" in df.columns else get_col(df, 0, "Fuar Adı")
-col_email = "E-mail" if "E-mail" in df.columns else get_col(df, 4, "E-mail")
+col_email = "E-mail"  if "E-mail"  in df.columns else get_col(df, 4, "E-mail")
 
-# Fuar listesi
 fuar_list = sorted([str(x).strip() for x in df[col_fuar].dropna().unique() if str(x).strip() != ""])
 fuar = st.selectbox("Select Fair", fuar_list)
 
@@ -111,23 +114,21 @@ def clean_emails(series) -> list[str]:
         s = str(v).strip()
         if not s:
             continue
-        # bir hücrede çoklu e-posta varsa ayıralım: ; , boşluk
         parts = re.split(r"[;, \n]+", s)
         for p in parts:
             p = p.strip()
             if p and EMAIL_REGEX.match(p):
                 emails.append(p)
-    # unique, orijinal sırayı mümkün olduğunca koru
-    seen = set()
-    uniq = []
+    seen, uniq = set(), []
     for e in emails:
-        if e.lower() not in seen:
+        k = e.lower()
+        if k not in seen:
             uniq.append(e)
-            seen.add(e.lower())
+            seen.add(k)
     return uniq
 
 # =========================
-# Filter by fair & build recipient list
+# Filter by fair & recipients
 # =========================
 rec_df = df[df[col_fuar].astype(str).str.strip() == fuar] if fuar else df.iloc[0:0]
 recipients = clean_emails(rec_df[col_email]) if not rec_df.empty else []
@@ -152,10 +153,76 @@ default_body = (
 
 st.subheader("Compose Email")
 subject = st.text_input("Subject (English only)", value=default_subject)
-body = st.text_area("Body (English only)", value=default_body, height=220)
+body_text = st.text_area("Body (English only)", value=default_body, height=220)
+
+include_signature = st.checkbox("Include HTML signature", value=True)
 
 st.subheader("Attachments (optional)")
 files = st.file_uploader("Select one or more files to attach", type=None, accept_multiple_files=True)
+
+# =========================
+# HTML signature block
+# =========================
+def html_signature() -> str:
+    # Logo genişliği mobil uyum için % yerine px kullandım; mail istemcileri daha uyumlu işler.
+    return f"""
+<table cellpadding="0" cellspacing="0" style="font-family:Arial,Helvetica,sans-serif; font-size:13px; color:#222;">
+  <tr>
+    <td style="padding:10px 0;">
+      <img src="{LOGO_URL}" alt="Şekeroğlu A.Ş." style="max-width:280px; height:auto; display:block;">
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:4px 0 0 0;">
+      <div style="font-weight:bold; font-size:16px; color:#0b6e4f;">Huseyin POLAT</div>
+      <div style="color:#666;">Export Sales Representative</div>
+    </td>
+  </tr>
+  <tr><td style="height:8px;"></td></tr>
+  <tr>
+    <td style="line-height:1.5;">
+      <div>📞 +90 531 765 69 60</div>
+      <div>☎️  +90 850 420 27 00</div>
+      <div>✉️  <a href="mailto:export1@sekeroglugroup.com" style="color:#0b6e4f; text-decoration:none;">export1@sekeroglugroup.com</a></div>
+      <div>🌐 <a href="https://www.sekeroglugroup.com" style="color:#0b6e4f; text-decoration:none;">www.sekeroglugroup.com</a></div>
+    </td>
+  </tr>
+  <tr><td style="height:8px;"></td></tr>
+  <tr>
+    <td style="color:#0b6e4f; font-weight:bold;">Şekeroğlu A.Ş.</td>
+  </tr>
+  <tr>
+    <td style="color:#666;">
+      Sanayi Mah. 60129 Nolu Cad. No:7 27110 Şehitkamil / Gaziantep
+    </td>
+  </tr>
+  <tr><td style="height:12px;"></td></tr>
+  <tr>
+    <td style="font-size:11px; color:#999;">
+      This message is intended only for the recipient and may contain confidential information. If you
+      received it by mistake, please delete it and notify the sender.
+    </td>
+  </tr>
+</table>
+"""
+
+def build_html_email(body_plain: str, add_signature: bool) -> str:
+    # Kullanıcı gövdesindeki satır sonlarını <br>’e çevir.
+    safe = (
+        body_plain
+        .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        .replace("\n", "<br>")
+    )
+    sig = html_signature() if add_signature else ""
+    divider = '<hr style="border:none;border-top:1px solid #e5e5e5;margin:18px 0;">' if add_signature else ""
+    html = f"""
+<div style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#222; line-height:1.6;">
+  {safe}
+  {divider}
+  {sig}
+</div>
+"""
+    return html
 
 # =========================
 # Send
@@ -166,38 +233,45 @@ with colA:
 with colB:
     send_btn = st.button("Send Email", type="primary", use_container_width=True)
 
-def send_bcc_email(from_email: str, password: str, subject: str, body: str, bcc_list: list[str], attachments=None):
+def send_bcc_email(from_email: str, password: str, subject: str, body_plain: str, body_html: str,
+                   bcc_list: list[str], attachments=None):
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = from_email
-    msg["To"] = from_email               # BCC gönderimde To kendimiz olsun
-    # BCC list normal header'a eklenmez; SMTP çağrısında ayrı verilir.
-    msg.set_content(body)
+    msg["To"] = from_email  # BCC teslim için To kendimize
 
-    # Attachments
+    # Çoklu format: plain + HTML (imzalı)
+    msg.set_content(body_plain)
+    msg.add_alternative(body_html, subtype="html")
+
+    # Ekler
     if attachments:
         for f in attachments:
             data = f.read()
             fname = f.name
-            maintype = "application"
-            subtype = "octet-stream"
-            # İçerik türünü Streamlit'ten alamadığımız için generic ekliyoruz
+            ctype, _ = mimetypes.guess_type(fname)
+            if ctype is None:
+                maintype, subtype = "application", "octet-stream"
+            else:
+                maintype, subtype = ctype.split("/", 1)
             msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=fname)
 
     with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT_SSL) as smtp:
         smtp.login(from_email, password)
+        # BCC: header’a yazmıyoruz; envelope listesine ekliyoruz
         smtp.sendmail(from_email, [from_email] + bcc_list, msg.as_string())
 
 if send_btn:
     if not recipients:
         st.error("No recipients to send.")
-    elif not subject.strip() or not body.strip():
+    elif not subject.strip() or not body_text.strip():
         st.error("Subject and Body are required.")
     elif not confirm:
         st.warning("Please confirm before sending.")
     else:
         try:
-            send_bcc_email(FROM_EMAIL, FROM_PASS, subject, body, recipients, attachments=files)
+            html_body = build_html_email(body_text, include_signature)
+            send_bcc_email(FROM_EMAIL, FROM_PASS, subject, body_text, html_body, recipients, attachments=files)
             st.success(f"Email sent successfully to {len(recipients)} recipients (BCC).")
         except Exception as e:
             st.error(f"Send failed: {e}")
