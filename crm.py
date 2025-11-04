@@ -12,6 +12,78 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="ŞEKEROĞLU İHRACAT CRM", layout="wide")
 
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
+
+    :root {
+        color-scheme: dark;
+    }
+
+    body, .stApp {
+        background-color: #0f1722;
+        color: #e2e8f0;
+        font-family: "Manrope", "Inter", "Segoe UI", sans-serif;
+    }
+
+    header[data-testid="stHeader"] {
+        background: rgba(15, 23, 42, 0.4);
+        backdrop-filter: blur(18px);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+    }
+
+    header[data-testid="stHeader"] * {
+        color: #e2e8f0 !important;
+    }
+
+    section[data-testid="stSidebar"] {
+        background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), #0b1120 70%);
+        border-right: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    section[data-testid="stSidebar"] > div {
+        padding-top: 1.5rem;
+        padding-bottom: 1.5rem;
+    }
+
+    div[data-testid="stSidebar"] .stButton > button {
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid rgba(148, 163, 184, 0.35);
+        color: #e2e8f0;
+        border-radius: 10px;
+        padding: 0.5rem 0.75rem;
+        width: 100%;
+        transition: all 0.2s ease;
+    }
+
+    div[data-testid="stSidebar"] .stButton > button:hover {
+        border-color: rgba(56, 189, 248, 0.65);
+        color: #38bdf8;
+        background: rgba(30, 41, 59, 0.95);
+    }
+
+    div.block-container {
+        padding-top: 2.5rem;
+        padding-bottom: 2.5rem;
+    }
+
+    div.block-container, div[data-testid="stVerticalBlock"] {
+        color: #e2e8f0;
+    }
+
+    .stApp main .block-container {
+        max-width: 1200px;
+    }
+
+    .stMarkdown, .stText, .stDataFrame {
+        color: inherit !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 EMBED_IMAGES = True
 
 CURRENCY_SYMBOLS = ["USD", "$", "€", "EUR", "₺", "TL", "tl", "Tl"]
@@ -1021,8 +1093,8 @@ def send_fair_bulk_email(to_emails, subject, body, attachments=None, embed_image
 # ===========================
 
 menuler = [
-    ("Genel Bakış", "📊"),
-    ("Yeni Cari Kaydı", "🧑‍💼"),
+    ("Özet Ekran", "📊"),
+    ("Cari Kayıtlar", "🧑‍💼"),
     ("Müşteri Portföyü", "📒"),
     ("Etkileşim Günlüğü", "☎️"),
     ("Teklif Yönetimi", "💰"),
@@ -1035,6 +1107,8 @@ menuler = [
     ("İçerik Arşivi", "🗂️"),
     ("Satış Analitiği", "📈"),
     ("Özel Gün Tebrikleri", "🎉"),
+    ("Help & Support", "❓"),
+    ("Settings", "⚙️"),
 ]
 
 # 2) Tüm kullanıcılar için aynı menüler
@@ -1057,49 +1131,80 @@ def resolve_allowed_menus(username):
 allowed_menus = resolve_allowed_menus(st.session_state.user)
 
 # 3) Etiketler ve haritalar
-labels = [f"{ikon} {isim}" for (isim, ikon) in allowed_menus]
-name_by_label = {f"{ikon} {isim}": isim for (isim, ikon) in allowed_menus}
-label_by_name = {isim: f"{ikon} {isim}" for (isim, ikon) in allowed_menus}
+labels = [isim for (isim, _ikon) in allowed_menus]
+name_by_label = {isim: isim for (isim, _ikon) in allowed_menus}
+label_by_name = {isim: isim for (isim, _ikon) in allowed_menus}
 
 # 4) Varsayılan state
 if "menu_state" not in st.session_state:
     st.session_state.menu_state = allowed_menus[0][0]
 
 # 5) CSS (kart görünümü; input gizlenmiyor—erişilebilir kalır)
-st.sidebar.markdown("""
-<style>
-section[data-testid="stSidebar"] { padding-top: .5rem; }
-div[data-testid="stSidebar"] .stRadio > div { gap: 10px !important; }
-div[data-testid="stSidebar"] .stRadio label {
-    border-radius: 12px;
-    padding: 12px 14px;
-    margin-bottom: 6px;
-    border: 1px solid rgba(255,255,255,0.12);
-    display: flex; align-items: center;
-    transition: transform .06s ease, filter .15s ease;
-    box-shadow: 0 1px 4px rgba(0,0,0,.08);
-}
-div[data-testid="stSidebar"] .stRadio label span { font-weight: 700; color: #fff; }
-div[data-testid="stSidebar"] .stRadio label:hover { filter: brightness(1.08); transform: translateY(-1px); }
-div[data-testid="stSidebar"] .stRadio [aria-checked="true"] { outline: 2px solid rgba(255,255,255,0.25); }
+st.sidebar.markdown(
+    """
+    <style>
+    div[data-testid="stSidebar"] .stRadio > div {
+        gap: 4px !important;
+    }
 
-/* Kart arka planları (sıra) */
-div[data-testid="stSidebar"] .stRadio label:nth-child(1)  { background: linear-gradient(90deg,#1D976C,#93F9B9); }  /* Özet */
-div[data-testid="stSidebar"] .stRadio label:nth-child(2)  { background: linear-gradient(90deg,#43cea2,#185a9d); }  /* Cari */
-div[data-testid="stSidebar"] .stRadio label:nth-child(3)  { background: linear-gradient(90deg,#ffb347,#ffcc33); }  /* Müşteri */
-div[data-testid="stSidebar"] .stRadio label:nth-child(4)  { background: linear-gradient(90deg,#ff5e62,#ff9966); }  /* Görüşme */
-div[data-testid="stSidebar"] .stRadio label:nth-child(5)  { background: linear-gradient(90deg,#8e54e9,#4776e6); }  /* Teklif */
-div[data-testid="stSidebar"] .stRadio label:nth-child(6)  { background: linear-gradient(90deg,#11998e,#38ef7d); }  /* Proforma */
-div[data-testid="stSidebar"] .stRadio label:nth-child(7)  { background: linear-gradient(90deg,#f7971e,#ffd200); }  /* Sipariş */
-div[data-testid="stSidebar"] .stRadio label:nth-child(8)  { background: linear-gradient(90deg,#f953c6,#b91d73); }  /* Evrak */
-div[data-testid="stSidebar"] .stRadio label:nth-child(9)  { background: linear-gradient(90deg,#43e97b,#38f9d7); }  /* Vade */
-div[data-testid="stSidebar"] .stRadio label:nth-child(10) { background: linear-gradient(90deg,#f857a6,#ff5858); }  /* ETA */
-div[data-testid="stSidebar"] .stRadio label:nth-child(11) { background: linear-gradient(90deg,#8e54e9,#bd4de6); }  /* Fuar */
-div[data-testid="stSidebar"] .stRadio label:nth-child(12) { background: linear-gradient(90deg,#4b79a1,#283e51); }  /* Medya */
-div[data-testid="stSidebar"] .stRadio label:nth-child(13) { background: linear-gradient(90deg,#2b5876,#4e4376); }  /* Satış Perf. */
-div[data-testid="stSidebar"] .stRadio label:nth-child(14) { background: linear-gradient(90deg,#ffafbd,#ffc3a0); }  /* Tebrikler */
-</style>
-""", unsafe_allow_html=True)
+    div[data-testid="stSidebar"] .stRadio label {
+        border-radius: 12px;
+        padding: 11px 16px;
+        margin-bottom: 2px;
+        border: 1px solid transparent;
+        display: flex;
+        align-items: center;
+        background: transparent;
+        transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.12s ease;
+    }
+
+    div[data-testid="stSidebar"] .stRadio label:hover {
+        border-color: rgba(148, 163, 184, 0.28);
+        background: rgba(148, 163, 184, 0.08);
+        transform: translateX(2px);
+    }
+
+    div[data-testid="stSidebar"] .stRadio label span {
+        font-weight: 500;
+        color: #94a3b8;
+        font-size: 0.95rem;
+        letter-spacing: 0.01em;
+    }
+
+    div[data-testid="stSidebar"] .stRadio [aria-checked="true"] {
+        background: rgba(56, 189, 248, 0.16);
+        border-color: rgba(56, 189, 248, 0.55);
+        box-shadow: inset 3px 0 0 #38bdf8;
+    }
+
+    div[data-testid="stSidebar"] .stRadio [aria-checked="true"] span {
+        color: #f8fafc;
+        font-weight: 600;
+    }
+
+    div[data-testid="stSidebar"] .streamlit-expanderHeader p {
+        color: #94a3b8 !important;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+    }
+
+    div[data-testid="stSidebar"] .streamlit-expanderHeader:hover {
+        color: #38bdf8 !important;
+    }
+
+    div[data-testid="stSidebar"] .streamlit-expanderContent {
+        background: rgba(15, 23, 42, 0.65);
+        border-left: 1px solid rgba(148, 163, 184, 0.18);
+        padding-left: 0.75rem;
+    }
+
+    div[data-testid="stSidebar"] .stText, div[data-testid="stSidebar"] .stMarkdown {
+        color: #94a3b8 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # 6) Callback: seçilince anında state yaz (tek tıkta geçiş)
 def _on_menu_change():
@@ -1138,8 +1243,11 @@ with st.sidebar.expander("🔄 Sheets Senkron"):
 ### === GENEL BAKIŞ (Vade Durumu Dahil) ===
 ### ===========================
 
-if menu == "Genel Bakış":
-    st.markdown("<h2 style='color:#219A41; font-weight:bold;'>ŞEKEROĞLU İHRACAT CRM - Genel Bakış</h2>", unsafe_allow_html=True)
+if menu == "Özet Ekran":
+    st.markdown(
+        "<h2 style='color:#38bdf8; font-weight:bold;'>ŞEKEROĞLU İHRACAT CRM - Özet Ekran</h2>",
+        unsafe_allow_html=True,
+    )
 
     invoices_df = df_evrak.copy()
     if "Tutar" not in invoices_df.columns:
@@ -1540,7 +1648,7 @@ if menu == "Genel Bakış":
 ### === CARİ EKLEME MENÜSÜ ===
 ### ===========================
 
-if menu == "Yeni Cari Kaydı":
+if menu == "Cari Kayıtlar":
     st.markdown("<h2 style='color:#219A41; font-weight:bold;'>Yeni Müşteri Ekle</h2>", unsafe_allow_html=True)
 
     # ---- Yardımcılar: doğrulama & normalizasyon ----
@@ -4812,3 +4920,20 @@ elif menu == "Satış Analitiği":
         if detail_cols:
             detail_df = detail_df[detail_cols]
         st.dataframe(detail_df, use_container_width=True)
+
+elif menu == "Help & Support":
+    st.markdown(
+        "<h2 style='color:#38bdf8; font-weight:bold;'>Yardım & Destek</h2>",
+        unsafe_allow_html=True,
+    )
+    st.info(
+        "Destek ekibimize ulaşmak için crm@sekeroglu.com.tr adresine e-posta gönderebilir veya +90 850 000 00 00 numaralı hattan iletişime geçebilirsiniz."
+    )
+    st.markdown(
+        "<p style='color:#94a3b8;'>SSS dökümanımızı ve eğitim videolarımızı şirket içi paylaşım klasöründen inceleyebilirsiniz.</p>",
+        unsafe_allow_html=True,
+    )
+
+elif menu == "Settings":
+    st.markdown("<h2 style='color:#38bdf8; font-weight:bold;'>Ayarlar</h2>", unsafe_allow_html=True)
+    st.info("Profil ayarları ve tema seçenekleri üzerinde çalışıyoruz. Güncellemeler yakında burada olacak.")
