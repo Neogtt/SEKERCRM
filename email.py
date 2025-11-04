@@ -555,11 +555,13 @@ def load_dataframes_from_excel(path: str = "temp.xlsx"):
         try:
             df_eta = pd.read_excel(path, sheet_name="ETA")
         except Exception:
-            for col in ETA_COLUMNS:
-                if col not in df_eta.columns:
-                    df_eta[col] = ""
-            extra_cols = [col for col in df_eta.columns if col not in ETA_COLUMNS]
-            df_eta = df_eta.reindex(columns=ETA_COLUMNS + extra_cols, fill_value="")            
+            df_eta = pd.DataFrame(columns=ETA_COLUMNS)
+
+        for col in ETA_COLUMNS:
+            if col not in df_eta.columns:
+                df_eta[col] = ""
+        extra_cols = [col for col in df_eta.columns if col not in ETA_COLUMNS]
+        df_eta = df_eta.reindex(columns=ETA_COLUMNS + extra_cols, fill_value="")          
         try:
             df_fuar_musteri = pd.read_excel(path, sheet_name="FuarMusteri")
         except Exception:
