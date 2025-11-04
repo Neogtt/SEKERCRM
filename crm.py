@@ -28,7 +28,8 @@ ETA_COLUMNS = ["Müşteri Adı", "Proforma No", "Sevk Tarihi", "ETA Tarihi", "A�
 def smart_to_num(value):
     if pd.isna(value):
         return 0.0
-
+df_eta = pd.DataFrame(columns=ETA_COLUMNS)
+    
     sanitized = str(value).strip()
     for symbol in CURRENCY_SYMBOLS:
         sanitized = sanitized.replace(symbol, "")
