@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-import importlib.util
+from pydrive2.auth import GoogleAuth
+from pydrive2.drive import GoogleDrive
 import io, os, datetime, tempfile, re, json, time, uuid, html
 import numpy as np
 import smtplib
@@ -8,14 +9,6 @@ from email.message import EmailMessage
 from email.utils import make_msgid
 import streamlit.components.v1 as components
 import matplotlib.pyplot as plt
-
-if importlib.util.find_spec("pydrive2") is None:
-    raise ModuleNotFoundError(
-        "pydrive2 paketi bulunamadı. Lütfen `pip install -r requirements.txt` veya `pip install pydrive2` komutunu çalıştırarak yükleyin."
-    )
-
-from pydrive2.auth import GoogleAuth
-from pydrive2.drive import GoogleDrive
 
 st.set_page_config(page_title="ŞEKEROĞLU İHRACAT CRM", layout="wide")
 
@@ -25,15 +18,10 @@ CURRENCY_SYMBOLS = ["USD", "$", "€", "EUR", "₺", "TL", "tl", "Tl"]
 
 ETA_COLUMNS = ["Müşteri Adı", "Proforma No", "Sevk Tarihi", "ETA Tarihi", "Açıklama"]
 
-# Global veri çerçeveleri, özellikle `load_dataframes_from_excel` çağrılmadan
-# önce tabloya erişilmesini gerektiren durumlarda `NameError` hatasını
-# önlemek için başlangıçta boş olarak tanımlanır.
-df_eta = pd.DataFrame(columns=ETA_COLUMNS)
-
 def smart_to_num(value):
     if pd.isna(value):
         return 0.0
-        
+
     sanitized = str(value).strip()
     for symbol in CURRENCY_SYMBOLS:
         sanitized = sanitized.replace(symbol, "")
@@ -560,13 +548,11 @@ def load_dataframes_from_excel(path: str = "temp.xlsx"):
         try:
             df_eta = pd.read_excel(path, sheet_name="ETA")
         except Exception:
-            df_eta = pd.DataFrame(columns=ETA_COLUMNS)
-
-        for col in ETA_COLUMNS:
-            if col not in df_eta.columns:
-                df_eta[col] = ""
-        extra_cols = [col for col in df_eta.columns if col not in ETA_COLUMNS]
-        df_eta = df_eta.reindex(columns=ETA_COLUMNS + extra_cols, fill_value="")          
+            for col in ETA_COLUMNS:
+                if col not in df_eta.columns:
+                    df_eta[col] = ""
+            extra_cols = [col for col in df_eta.columns if col not in ETA_COLUMNS]
+            df_eta = df_eta.reindex(columns=ETA_COLUMNS + extra_cols, fill_value="")            
         try:
             df_fuar_musteri = pd.read_excel(path, sheet_name="FuarMusteri")
         except Exception:
