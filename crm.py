@@ -64,7 +64,9 @@ if "user" not in st.session_state:
     st.session_state.user = None
 if "sync_status" not in st.session_state:
     st.session_state.sync_status = None
-
+if "_selected_fuar" not in st.session_state:
+    st.session_state["_selected_fuar"] = ""
+    
 def login_screen():
     st.title("ŞEKEROĞLU CRM - Giriş Ekranı")
     username = st.text_input("Kullanıcı Adı")
@@ -4143,8 +4145,17 @@ if menu == "Fuar Kayıtları":
     mevcut_fuarlar = sorted([f for f in df_fuar_musteri["Fuar Adı"].dropna().unique() if str(f).strip() != ""])
     col_f1, col_f2 = st.columns([2, 1])
     with col_f1:
-        fuar_adi = st.selectbox("Fuar Seçiniz", ["— Fuar Seçiniz —"] + mevcut_fuarlar, index=0)
-        fuar_adi = "" if fuar_adi == "— Fuar Seçiniz —" else fuar_adi
+        fuar_secim_opsiyonlari = ["— Fuar Seçiniz —"] + mevcut_fuarlar
+        varsayilan_indeks = 0
+        onceki_fuar = st.session_state.get("_selected_fuar", "")
+        if onceki_fuar:
+            try:
+                varsayilan_indeks = fuar_secim_opsiyonlari.index(onceki_fuar)
+            except ValueError:
+                varsayilan_indeks = 0
+        fuar_secimi = st.selectbox("Fuar Seçiniz", fuar_secim_opsiyonlari, index=varsayilan_indeks)
+        fuar_adi = "" if fuar_secimi == "— Fuar Seçiniz —" else fuar_secimi
+        st.session_state["_selected_fuar"] = fuar_adi
     with col_f2:
         yeni_fuar = st.text_input("Yeni Fuar Adı (opsiyonel)")
         if st.button("Fuar Ekle"):
@@ -4153,11 +4164,23 @@ if menu == "Fuar Kayıtları":
                 st.warning("Fuar adı boş olamaz.")
             elif y in mevcut_fuarlar:
                 st.info("Bu fuar zaten mevcut.")
-                fuar_adi = y
+                st.session_state["_selected_fuar"] = y
             else:
-                fuar_adi = y
+                yeni_satir = {col: "" for col in df_fuar_musteri.columns}
+                yeni_satir["Fuar Adı"] = y
+                if "Görüşme Kalitesi" in yeni_satir:
+                    yeni_satir["Görüşme Kalitesi"] = np.nan
+                if "Tarih" in yeni_satir:
+                    yeni_satir["Tarih"] = pd.NaT
+                df_fuar_musteri = pd.concat(
+                    [df_fuar_musteri, pd.DataFrame([yeni_satir])],
+                    ignore_index=True,
+                )
+                update_excel()
+                st.session_state["_selected_fuar"] = y
                 st.success(f"Fuar eklendi: {y}")
-
+                st.rerun()
+                
     secim = st.radio("İşlem Seçiniz:", ["Yeni Kayıt", "Eski Kayıt"], horizontal=True)
 
     # --- YENİ KAYIT ---
@@ -4191,8 +4214,19 @@ if menu == "Fuar Kayıtları":
                         "Görüşme Kalitesi": int(gorusme_kalitesi),
                         "Tarih": tarih,
                     }
-                    df_fuar_musteri = pd.concat([df_fuar_musteri, pd.DataFrame([yeni])], ignore_index=True)
+                    placeholder_indeksleri = df_fuar_musteri[
+                        (df_fuar_musteri["Fuar Adı"] == fuar_adi)
+                        & df_fuar_musteri["Müşteri Adı"].fillna("").astype(str).str.strip().eq("")
+                    ].index
+
+                    if len(placeholder_indeksleri) > 0:
+                        hedef_index = placeholder_indeksleri[0]
+                        for anahtar, deger in yeni.items():
+                            df_fuar_musteri.at[hedef_index, anahtar] = deger
+                    else:
+                        df_fuar_musteri = pd.concat([df_fuar_musteri, pd.DataFrame([yeni])], ignore_index=True)
                     update_excel()
+                    st.session_state["_selected_fuar"] = fuar_adi                    
                     st.success("Fuar müşterisi eklendi!")
                     st.rerun()
 
