@@ -3597,19 +3597,90 @@ elif menu == "Tahsilat Planı":
         elif durum_f == "Sadece Ödenmiş":
             view = view[view["Kalan Bakiye"] <= 0.01]
 
-        # Görüntü tablosu (görsel kopya)
-        show = view.copy()
-        show["Vade Tarihi"] = pd.to_datetime(show["Vade Tarihi"]).dt.strftime("%d/%m/%Y")
-        if "Fatura Tarihi" in show.columns:
-            show["Fatura Tarihi"] = pd.to_datetime(show["Fatura Tarihi"]).dt.strftime("%d/%m/%Y")
-        show["Ödenen Tutar"] = pd.to_numeric(show["Ödenen Tutar"], errors="coerce").fillna(0.0)
-        show["Kalan Bakiye"] = (show["Tutar_num"].fillna(0.0) - show["Ödenen Tutar"]).clip(lower=0.0)  
-        show["Tutar"] = show["Tutar_num"].map(lambda x: f"{float(x):,.2f} USD")
-        show["Ödenen Tutar"] = show["Ödenen Tutar"].map(lambda x: f"{float(x):,.2f} USD")
-        show["Kalan Bakiye"] = show["Kalan Bakiye"].map(lambda x: f"{float(x):,.2f} USD")
-        cols = ["Müşteri Adı","Ülke","Satış Temsilcisi","Fatura No","Fatura Tarihi","Vade Tarihi","Kalan Gün","Tutar","Ödenen Tutar","Kalan Bakiye","Ödendi"]
-        cols = [c for c in cols if c in show.columns]
-        st.dataframe(show[cols].sort_values(["Kalan Gün","Vade Tarihi"]), use_container_width=True)
+        # Düzenlenebilir tablo (Ödendi sütunu için)
+        editor_view = view.reset_index(drop=False).rename(columns={"index": "_row"})
+        editor = editor_view[[
+            "_row",
+            "Müşteri Adı",
+            "Ülke",
+            "Satış Temsilcisi",
+            "Fatura No",
+            "Fatura Tarihi",
+            "Vade Tarihi",
+            "Kalan Gün",
+            "Tutar_num",
+            "Ödenen Tutar",
+            "Kalan Bakiye",
+            "Ödendi",
+        ]].copy()
+
+        editor["__fatura_order"] = pd.to_datetime(editor_view["Fatura Tarihi"], errors="coerce")
+        editor["__vade_order"] = pd.to_datetime(editor_view["Vade Tarihi"], errors="coerce")
+
+        editor_display = editor.sort_values(["Kalan Gün", "__vade_order"])
+        editor_display["Fatura Tarihi"] = editor_display["__fatura_order"].dt.strftime("%d/%m/%Y").fillna("")
+        editor_display["Vade Tarihi"] = editor_display["__vade_order"].dt.strftime("%d/%m/%Y").fillna("")
+        editor_display["Tutar_num"] = pd.to_numeric(editor_display["Tutar_num"], errors="coerce").fillna(0.0)
+        editor_display["Ödenen Tutar"] = pd.to_numeric(editor_display["Ödenen Tutar"], errors="coerce").fillna(0.0)
+        editor_display["Kalan Bakiye"] = pd.to_numeric(editor_display["Kalan Bakiye"], errors="coerce").fillna(0.0)
+        editor_display["Ödendi"] = editor_display["Ödendi"].astype(bool)
+
+        edited = st.data_editor(
+            editor_display.drop(columns=["__fatura_order", "__vade_order"]),
+            hide_index=True,
+            use_container_width=True,
+            num_rows="fixed",
+            column_config={
+                "_row": st.column_config.Column("Satır ID", disabled=True, width="small"),
+                "Tutar_num": st.column_config.NumberColumn("Fatura Tutarı (USD)", format="%.2f", disabled=True),
+                "Ödenen Tutar": st.column_config.NumberColumn("Ödenen Tutar (USD)", format="%.2f", disabled=True),
+                "Kalan Bakiye": st.column_config.NumberColumn("Kalan Bakiye (USD)", format="%.2f", disabled=True),
+                "Ödendi": st.column_config.CheckboxColumn("Ödendi", help="Ödemesi tamamlandıysa işaretleyin."),
+            },
+            disabled=[
+                "_row",
+                "Müşteri Adı",
+                "Ülke",
+                "Satış Temsilcisi",
+                "Fatura No",
+                "Fatura Tarihi",
+                "Vade Tarihi",
+                "Kalan Gün",
+                "Tutar_num",
+                "Ödenen Tutar",
+                "Kalan Bakiye",
+            ],
+            key="tahsilat_editor",
+        )
+
+        if not edited.empty:
+            edited["_row"] = pd.to_numeric(edited["_row"], errors="coerce").fillna(-1).astype(int)
+            edited["Ödendi"] = edited["Ödendi"].astype(bool)
+            original_flags = editor_view.set_index("_row")["Ödendi"].astype(bool)
+            merged = edited.merge(
+                original_flags.reset_index().rename(columns={"Ödendi": "_original_odendi"}),
+                on="_row",
+                how="left",
+            )
+            changed = merged[merged["Ödendi"] != merged["_original_odendi"]]
+
+            if not changed.empty:
+                for _, row in changed.iterrows():
+                    idx = int(row["_row"])
+                    new_flag = bool(row["Ödendi"])
+                    df_evrak.at[idx, "Ödendi"] = new_flag
+
+                    toplam = pd.to_numeric(pd.Series([df_evrak.at[idx, "Tutar_num"]]), errors="coerce").fillna(0.0).iloc[0]
+                    mevcut = pd.to_numeric(pd.Series([df_evrak.at[idx, "Ödenen Tutar"]]), errors="coerce").fillna(0.0).iloc[0]
+
+                    if new_flag:
+                        df_evrak.at[idx, "Ödenen Tutar"] = round(max(toplam, 0.0), 2)
+                    else:
+                        df_evrak.at[idx, "Ödenen Tutar"] = round(min(mevcut, toplam), 2)
+
+                update_excel()
+                st.success(f"{len(changed)} kaydın ödeme durumu güncellendi.")
+                st.rerun()
 
         st.markdown("#### Ödeme Durumu Güncelle")
         if not view.empty:
