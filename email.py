@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
-from pydrive2.auth import GoogleAuth
-from pydrive2.drive import GoogleDrive
+import importlib.util
 import io, os, datetime, tempfile, re, json, time, uuid, html
 import numpy as np
 import smtplib
@@ -9,6 +8,14 @@ from email.message import EmailMessage
 from email.utils import make_msgid
 import streamlit.components.v1 as components
 import matplotlib.pyplot as plt
+
+if importlib.util.find_spec("pydrive2") is None:
+    raise ModuleNotFoundError(
+        "pydrive2 paketi bulunamadı. Lütfen `pip install -r requirements.txt` veya `pip install pydrive2` komutunu çalıştırarak yükleyin."
+    )
+
+from pydrive2.auth import GoogleAuth
+from pydrive2.drive import GoogleDrive
 
 st.set_page_config(page_title="ŞEKEROĞLU İHRACAT CRM", layout="wide")
 
