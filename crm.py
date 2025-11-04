@@ -18,12 +18,6 @@ CURRENCY_SYMBOLS = ["USD", "$", "€", "EUR", "₺", "TL", "tl", "Tl"]
 
 ETA_COLUMNS = ["Müşteri Adı", "Proforma No", "Sevk Tarihi", "ETA Tarihi", "Açıklama"]
 
-# Global veri çerçeveleri, özellikle `load_dataframes_from_excel` çağrılmadan
-# önce tabloya erişilmesini gerektiren durumlarda `NameError` hatasını
-# önlemek için başlangıçta boş olarak tanımlanır.
-df_eta = pd.DataFrame(columns=ETA_COLUMNS)
-
-
 def smart_to_num(value):
     if pd.isna(value):
         return 0.0
@@ -1041,12 +1035,10 @@ menuler = [
     ("Özel Gün Tebrikleri", "🎉"),
 ]
 
-ALL_MENU_NAMES = [isim for (isim, _ikon) in menuler]
-
 # 2) Tüm kullanıcılar için aynı menüler
 USER_MENU_PERMISSIONS = {
-    "export1": [name for name in ALL_MENU_NAMES if name not in {"Fatura işlemleri", "ETA İzleme"}],
-    "Muhammed": {"ETA İzleme", "Fatura işlemleri"},  
+    "Muhammed": {"ETA İzleme"},
+    "Muhammed": {"ETA İzleme", "Fatura işlemleri"},    
 }
 
 
@@ -3185,10 +3177,12 @@ elif menu == "Fatura işlemleri":
                 st.session_state[proforma_key] = str(hedef.get("Proforma No", ""))
                 st.session_state[pending_reset_flag_key] = True
                 st.rerun()
-  
+
+   
+    
     # ---- Müşteri / Proforma seçimleri ----
     st.markdown("### Fatura Ekle")
- 
+    
     musteri_secenek = sorted(df_proforma["Müşteri Adı"].dropna().astype(str).unique().tolist())
     musteri_options = [""] + musteri_secenek
     if st.session_state[musteri_key] not in musteri_options:
