@@ -18,6 +18,12 @@ CURRENCY_SYMBOLS = ["USD", "$", "€", "EUR", "₺", "TL", "tl", "Tl"]
 
 ETA_COLUMNS = ["Müşteri Adı", "Proforma No", "Sevk Tarihi", "ETA Tarihi", "Açıklama"]
 
+# Global veri çerçeveleri, özellikle `load_dataframes_from_excel` çağrılmadan
+# önce tabloya erişilmesini gerektiren durumlarda `NameError` hatasını
+# önlemek için başlangıçta boş olarak tanımlanır.
+df_eta = pd.DataFrame(columns=ETA_COLUMNS)
+
+
 def smart_to_num(value):
     if pd.isna(value):
         return 0.0
