@@ -22,8 +22,8 @@ st.markdown(
     }
 
     body, .stApp {
-        background-color: #0f1722;
-        color: #e2e8f0;
+        background-color: #121c2b;
+        color: #e8edf5;
         font-family: "Manrope", "Inter", "Segoe UI", sans-serif;
     }
 
@@ -38,19 +38,20 @@ st.markdown(
     }
 
     section[data-testid="stSidebar"] {
-        background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), #0b1120 70%);
-        border-right: 1px solid rgba(148, 163, 184, 0.18);
+        background: linear-gradient(195deg, rgba(17, 25, 40, 0.98) 0%, rgba(8, 15, 28, 0.96) 55%, rgba(5, 12, 25, 0.94) 100%);
+        border-right: 1px solid rgba(148, 163, 184, 0.22);
+        box-shadow: 12px 0 32px rgba(2, 6, 23, 0.35);
     }
 
     section[data-testid="stSidebar"] > div {
-        padding-top: 1.5rem;
-        padding-bottom: 1.5rem;
+        padding-top: 1.75rem;
+        padding-bottom: 1.75rem;
     }
 
     div[data-testid="stSidebar"] .stButton > button {
-        background: rgba(15, 23, 42, 0.8);
-        border: 1px solid rgba(148, 163, 184, 0.35);
-        color: #e2e8f0;
+        background: rgba(15, 23, 42, 0.86);
+        border: 1px solid rgba(148, 163, 184, 0.42);
+        color: #f8fafc;
         border-radius: 10px;
         padding: 0.5rem 0.75rem;
         width: 100%;
@@ -58,9 +59,10 @@ st.markdown(
     }
 
     div[data-testid="stSidebar"] .stButton > button:hover {
-        border-color: rgba(56, 189, 248, 0.65);
-        color: #38bdf8;
-        background: rgba(30, 41, 59, 0.95);
+        border-color: rgba(59, 130, 246, 0.75);
+        color: #60a5fa;
+        background: rgba(30, 41, 59, 0.98);
+        box-shadow: 0 12px 24px rgba(30, 64, 175, 0.25);
     }
 
     div.block-container {
@@ -79,6 +81,32 @@ st.markdown(
     .stMarkdown, .stText, .stDataFrame {
         color: inherit !important;
     }
+
+    div[data-testid="stDataFrame"] {
+        background: rgba(15, 23, 42, 0.72);
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        padding: 0.75rem 0.65rem 0.9rem 0.65rem;
+    }
+
+    div[data-testid="stDataFrame"] div[role="columnheader"] {
+        background: rgba(30, 41, 59, 0.85) !important;
+        color: #f8fafc !important;
+        font-weight: 600;
+    }
+
+    div[data-testid="stDataFrame"] div[role="gridcell"] {
+        color: #e8edf5 !important;
+    }
+
+    div[data-testid="stDataFrame"] tbody tr:nth-child(even) div[role="gridcell"] {
+        background-color: rgba(30, 41, 59, 0.55) !important;
+    }
+
+    div[data-testid="stDataFrame"] tbody tr:nth-child(odd) div[role="gridcell"] {
+        background-color: rgba(15, 23, 42, 0.35) !important;
+    }
+    
     </style>
     """,
     unsafe_allow_html=True,
@@ -1094,20 +1122,20 @@ def send_fair_bulk_email(to_emails, subject, body, attachments=None, embed_image
 
 menuler = [
     ("Özet Ekran", "📊"),
-    ("Cari Kayıtlar", "🧑‍💼"),
-    ("Müşteri Portföyü", "📒"),
+    ("Cari Kayıtlar", "🧾"),
+    ("Müşteri Portföyü", "👥"),
     ("Etkileşim Günlüğü", "☎️"),
-    ("Teklif Yönetimi", "💰"),
+    ("Teklif Yönetimi", "💼"),
     ("Proforma Yönetimi", "📄"),
     ("Sipariş Operasyonları", "🚚"),
-    ("Fatura işlemleri", "📑"),
-    ("Tahsilat Planı", "⏰"),
+    ("Fatura işlemleri", "🧾"),
+    ("Tahsilat Planı", "💳"),
     ("ETA İzleme", "🛳️"),
     ("Fuar Kayıtları", "🎫"),
     ("İçerik Arşivi", "🗂️"),
     ("Satış Analitiği", "📈"),
     ("Özel Gün Tebrikleri", "🎉"),
-    ("Help & Support", "❓"),
+    ("Help & Support", "💡"),
     ("Settings", "⚙️"),
 ]
 
@@ -1131,9 +1159,9 @@ def resolve_allowed_menus(username):
 allowed_menus = resolve_allowed_menus(st.session_state.user)
 
 # 3) Etiketler ve haritalar
-labels = [isim for (isim, _ikon) in allowed_menus]
-name_by_label = {isim: isim for (isim, _ikon) in allowed_menus}
-label_by_name = {isim: isim for (isim, _ikon) in allowed_menus}
+labels = [f"{ikon}  {isim}" for (isim, ikon) in allowed_menus]
+name_by_label = {f"{ikon}  {isim}": isim for (isim, ikon) in allowed_menus}
+label_by_name = {isim: f"{ikon}  {isim}" for (isim, ikon) in allowed_menus}
 
 # 4) Varsayılan state
 if "menu_state" not in st.session_state:
@@ -1144,42 +1172,47 @@ st.sidebar.markdown(
     """
     <style>
     div[data-testid="stSidebar"] .stRadio > div {
-        gap: 4px !important;
+        gap: 6px !important;
     }
 
     div[data-testid="stSidebar"] .stRadio label {
-        border-radius: 12px;
-        padding: 11px 16px;
+        border-radius: 14px;
+        padding: 12px 18px;
         margin-bottom: 2px;
-        border: 1px solid transparent;
+        border: 1px solid rgba(148, 163, 184, 0.14);
         display: flex;
         align-items: center;
-        background: transparent;
-        transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.12s ease;
+        background: rgba(15, 23, 42, 0.68);
+        color: #f1f5ff;
+        transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.12s ease, box-shadow 0.2s ease;
     }
 
     div[data-testid="stSidebar"] .stRadio label:hover {
-        border-color: rgba(148, 163, 184, 0.28);
-        background: rgba(148, 163, 184, 0.08);
-        transform: translateX(2px);
+        border-color: rgba(99, 102, 241, 0.45);
+        background: rgba(30, 41, 59, 0.82);
+        color: #ffffff;
+        transform: translateX(3px);
+        box-shadow: 0 8px 22px rgba(30, 64, 175, 0.25);
     }
 
     div[data-testid="stSidebar"] .stRadio label span {
-        font-weight: 500;
-        color: #94a3b8;
-        font-size: 0.95rem;
-        letter-spacing: 0.01em;
+        font-weight: 600;
+        color: inherit !important;
+        font-size: 0.98rem;
+        letter-spacing: 0.012em;
+        white-space: pre;
+        text-shadow: 0 0 18px rgba(10, 20, 40, 0.35);
     }
 
     div[data-testid="stSidebar"] .stRadio [aria-checked="true"] {
-        background: rgba(56, 189, 248, 0.16);
-        border-color: rgba(56, 189, 248, 0.55);
-        box-shadow: inset 3px 0 0 #38bdf8;
+        background: rgba(59, 130, 246, 0.22);
+        border-color: rgba(96, 165, 250, 0.85);
+        box-shadow: inset 4px 0 0 #60a5fa, 0 14px 32px rgba(37, 99, 235, 0.35);
+        transform: translateX(4px);
     }
 
     div[data-testid="stSidebar"] .stRadio [aria-checked="true"] span {
-        color: #f8fafc;
-        font-weight: 600;
+        color: #ffffff !important;
     }
 
     div[data-testid="stSidebar"] .streamlit-expanderHeader p {
@@ -1199,7 +1232,7 @@ st.sidebar.markdown(
     }
 
     div[data-testid="stSidebar"] .stText, div[data-testid="stSidebar"] .stMarkdown {
-        color: #94a3b8 !important;
+        color: #dce4f5 !important;
     }
     </style>
     """,
