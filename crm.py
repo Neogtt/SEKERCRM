@@ -12,106 +12,6 @@ import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="ŞEKEROĞLU İHRACAT CRM", layout="wide")
 
-st.markdown(
-    """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
-
-    :root {
-        color-scheme: dark;
-    }
-
-    body, .stApp {
-        background-color: #121c2b;
-        color: #e8edf5;
-        font-family: "Manrope", "Inter", "Segoe UI", sans-serif;
-    }
-
-    header[data-testid="stHeader"] {
-        background: rgba(15, 23, 42, 0.4);
-        backdrop-filter: blur(18px);
-        border-bottom: 1px solid rgba(148, 163, 184, 0.25);
-    }
-
-    header[data-testid="stHeader"] * {
-        color: #e2e8f0 !important;
-    }
-
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(195deg, rgba(17, 25, 40, 0.98) 0%, rgba(8, 15, 28, 0.96) 55%, rgba(5, 12, 25, 0.94) 100%);
-        border-right: 1px solid rgba(148, 163, 184, 0.22);
-        box-shadow: 12px 0 32px rgba(2, 6, 23, 0.35);
-    }
-
-    section[data-testid="stSidebar"] > div {
-        padding-top: 1.75rem;
-        padding-bottom: 1.75rem;
-    }
-
-    div[data-testid="stSidebar"] .stButton > button {
-        background: rgba(15, 23, 42, 0.86);
-        border: 1px solid rgba(148, 163, 184, 0.42);
-        color: #f8fafc;
-        border-radius: 10px;
-        padding: 0.5rem 0.75rem;
-        width: 100%;
-        transition: all 0.2s ease;
-    }
-
-    div[data-testid="stSidebar"] .stButton > button:hover {
-        border-color: rgba(59, 130, 246, 0.75);
-        color: #60a5fa;
-        background: rgba(30, 41, 59, 0.98);
-        box-shadow: 0 12px 24px rgba(30, 64, 175, 0.25);
-    }
-
-    div.block-container {
-        padding-top: 2.5rem;
-        padding-bottom: 2.5rem;
-    }
-
-    div.block-container, div[data-testid="stVerticalBlock"] {
-        color: #e2e8f0;
-    }
-
-    .stApp main .block-container {
-        max-width: 1200px;
-    }
-
-    .stMarkdown, .stText, .stDataFrame {
-        color: inherit !important;
-    }
-
-    div[data-testid="stDataFrame"] {
-        background: rgba(15, 23, 42, 0.72);
-        border-radius: 14px;
-        border: 1px solid rgba(148, 163, 184, 0.22);
-        padding: 0.75rem 0.65rem 0.9rem 0.65rem;
-    }
-
-    div[data-testid="stDataFrame"] div[role="columnheader"] {
-        background: rgba(30, 41, 59, 0.85) !important;
-        color: #f8fafc !important;
-        font-weight: 600;
-    }
-
-    div[data-testid="stDataFrame"] div[role="gridcell"] {
-        color: #e8edf5 !important;
-    }
-
-    div[data-testid="stDataFrame"] tbody tr:nth-child(even) div[role="gridcell"] {
-        background-color: rgba(30, 41, 59, 0.55) !important;
-    }
-
-    div[data-testid="stDataFrame"] tbody tr:nth-child(odd) div[role="gridcell"] {
-        background-color: rgba(15, 23, 42, 0.35) !important;
-    }
-    
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
 EMBED_IMAGES = True
 
 CURRENCY_SYMBOLS = ["USD", "$", "€", "EUR", "₺", "TL", "tl", "Tl"]
@@ -572,14 +472,12 @@ def get_holiday_template_content(template_name, language_code):
         return fallback, True
     return None, False
 
-
-
 # --- LOGO (WEB LINKİNDEN AL) ---
 logo_url = "https://www.sekeroglugroup.com/storage/settings/xdp5r6DZIFJMNGOStqwvKCiVHDhYxA84jFr61TNp.svg"
 
 col1, col2 = st.columns([3, 7])
 with col1:
-    st.image(logo_url, width=300)
+    st.image(logo_url, width=100)
 with col2:
     st.markdown("""
         <style>
@@ -591,8 +489,6 @@ with col2:
             </h1>
         </div>
     """, unsafe_allow_html=True)
-
-
 
 @st.cache_resource
 def get_drive():
@@ -701,8 +597,6 @@ def update_excel():
         f.write(buffer.read())
     downloaded.SetContentFile("temp.xlsx")
     downloaded.Upload()
-
-
 
 def sync_excel_bidirectional():
     global downloaded
