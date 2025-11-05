@@ -1120,131 +1120,123 @@ def send_fair_bulk_email(to_emails, subject, body, attachments=None, embed_image
 # ==== ŞIK SIDEBAR MENÜ
 # ===========================
 
+# ===== ŞIK SIDEBAR MENÜ (GÖRSELDEKİNE UYUMLU) =====
+import streamlit as st
+
 menuler = [
-    ("Özet Ekran", "📊"),
-    ("Cari Kayıtlar", "🧾"),
-    ("Müşteri Portföyü", "👥"),
+    ("Özet Ekran", "🧩"),
+    ("Cari Kayıtlar", "👤"),
     ("Etkileşim Günlüğü", "☎️"),
     ("Teklif Yönetimi", "💼"),
     ("Proforma Yönetimi", "📄"),
     ("Sipariş Operasyonları", "🚚"),
     ("Fatura işlemleri", "🧾"),
-    ("Tahsilat Planı", "💳"),
-    ("ETA İzleme", "🛳️"),
+    ("Tahsilat planı", "💳"),
+    ("ETA izleme", "🛳️"),
     ("Fuar Kayıtları", "🎫"),
     ("İçerik Arşivi", "🗂️"),
     ("Satış Analitiği", "📈"),
-    ("Özel Gün Tebrikleri", "🎉"),
+    ("Özel gün tebrikleri", "🎉"),
     ("Help & Support", "💡"),
     ("Settings", "⚙️"),
 ]
 
-# 2) Tüm kullanıcılar için aynı menüler
+# Kullanıcı izinleri (tek entry!)
 USER_MENU_PERMISSIONS = {
-    "Muhammed": {"ETA İzleme"},
-    "Muhammed": {"ETA İzleme", "Fatura işlemleri"},    
+    "Muhammed": {"ETA izleme", "Fatura işlemleri"},
 }
 
-
 def resolve_allowed_menus(username):
-    allowed_names = USER_MENU_PERMISSIONS.get(username)
-    if not allowed_names:
+    allowed_set = USER_MENU_PERMISSIONS.get(username)
+    if not allowed_set:
         return menuler
+    # İzinler menü adlarıyla eşleşiyor; yazımı birebir koruduk
+    return [item for item in menuler if item[0] in allowed_set] or menuler
 
-    filtered = [item for item in menuler if item[0] in allowed_names]
-    return filtered if filtered else menuler
-
-
-# 2) Kullanıcıya göre menüleri sınırla
+# Güvenli kullanıcı adı fallback
+st.session_state.user = st.session_state.get("user", "Anonim")
 allowed_menus = resolve_allowed_menus(st.session_state.user)
 
-# 3) Etiketler ve haritalar
+# Etiketler ve haritalar
 labels = [f"{ikon}  {isim}" for (isim, ikon) in allowed_menus]
 name_by_label = {f"{ikon}  {isim}": isim for (isim, ikon) in allowed_menus}
 label_by_name = {isim: f"{ikon}  {isim}" for (isim, ikon) in allowed_menus}
 
-# 4) Varsayılan state
+# Varsayılan state
 if "menu_state" not in st.session_state:
     st.session_state.menu_state = allowed_menus[0][0]
 
-# 5) CSS (kart görünümü; input gizlenmiyor—erişilebilir kalır)
+# CSS – kart görünümlü, koyu tema, hover ve aktif vurgular
 st.sidebar.markdown(
     """
     <style>
-    div[data-testid="stSidebar"] .stRadio > div {
-        gap: 6px !important;
-    }
+    /* Sidebar zemini ile uyumlu boşluklar */
+    div[data-testid="stSidebar"] { padding-top: .5rem; }
 
+    /* Radio kapsayıcısı */
+    div[data-testid="stSidebar"] .stRadio > div     { gap: 6px !important; }
+
+    /* Etiket stili */
     div[data-testid="stSidebar"] .stRadio label {
-        border-radius: 14px;
-        padding: 12px 18px;
+        border-radius: 12px;
+        padding: 10px 14px;
         margin-bottom: 2px;
-        border: 1px solid rgba(148, 163, 184, 0.14);
+        border: 1px solid rgba(148, 163, 184, 0.10);
         display: flex;
         align-items: center;
-        background: rgba(15, 23, 42, 0.68);
-        color: #ffffff !important;
-        transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.12s ease, box-shadow 0.2s ease;
+        background: rgba(17, 24, 39, 0.70); /* #111827 */
+        color: #e5e7eb !important;          /* slate-100 */
+        transition: border-color .18s ease, background .18s ease, transform .10s ease, box-shadow .18s ease;
     }
 
+    /* Hover efekti */
     div[data-testid="stSidebar"] .stRadio label:hover {
-        border-color: rgba(99, 102, 241, 0.45);
-        background: rgba(30, 41, 59, 0.82);
-        color: #ffffff;
+        border-color: rgba(99, 102, 241, 0.45);     /* indigo */
+        background: rgba(31, 41, 55, 0.86);         /* #1f2937 */
         transform: translateX(3px);
-        box-shadow: 0 8px 22px rgba(30, 64, 175, 0.25);
+        box-shadow: 0 10px 24px rgba(30, 64, 175, 0.28);
     }
 
+    /* Etiket içindeki metin (ikon + yazı) */
     div[data-testid="stSidebar"] .stRadio label span {
         font-weight: 600;
-        color: #ffffff !important;
-        font-size: 0.98rem;
-        letter-spacing: 0.012em;
+        color: #e5e7eb !important;
+        font-size: 0.96rem;
+        letter-spacing: 0.01em;
         white-space: pre;
-        text-shadow: 0 0 18px rgba(10, 20, 40, 0.35);
+        text-shadow: 0 0 16px rgba(10, 20, 40, 0.35);
     }
 
+    /* Seçili öğe */
     div[data-testid="stSidebar"] .stRadio [aria-checked="true"] {
-        background: rgba(59, 130, 246, 0.22);
+        background: rgba(59, 130, 246, 0.20);       /* blue-500/20 */
         border-color: rgba(96, 165, 250, 0.85);
         box-shadow: inset 4px 0 0 #60a5fa, 0 14px 32px rgba(37, 99, 235, 0.35);
         transform: translateX(4px);
     }
 
-    div[data-testid="stSidebar"] .stRadio [aria-checked="true"] span {
-        color: #ffffff !important;
-    }
-
+    /* Expanders (isteğe bağlı) */
     div[data-testid="stSidebar"] .streamlit-expanderHeader p {
         color: #94a3b8 !important;
         font-weight: 500;
         letter-spacing: 0.02em;
     }
-
-    div[data-testid="stSidebar"] .streamlit-expanderHeader:hover {
-        color: #38bdf8 !important;
-    }
-
     div[data-testid="stSidebar"] .streamlit-expanderContent {
-        background: rgba(15, 23, 42, 0.65);
+        background: rgba(15, 23, 42, 0.60);
         border-left: 1px solid rgba(148, 163, 184, 0.18);
-        padding-left: 0.75rem;
-    }
-
-    div[data-testid="stSidebar"] .stText, div[data-testid="stSidebar"] .stMarkdown {
-        color: #dce4f5 !important;
+        padding-left: .75rem;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# 6) Callback: seçilince anında state yaz (tek tıkta geçiş)
+# Callback
 def _on_menu_change():
     sel_label = st.session_state.menu_radio_label
     st.session_state.menu_state = name_by_label.get(sel_label, allowed_menus[0][0])
 
-# 7) Radio’yu mevcut state’e göre başlat
+# Radio başlangıç etiketi
 current_label = label_by_name.get(st.session_state.menu_state, labels[0])
 current_index = labels.index(current_label) if current_label in labels else 0
 
@@ -1257,18 +1249,18 @@ st.sidebar.radio(
     on_change=_on_menu_change
 )
 
-# 8) Kullanım: seçili menü adı
+# Seçili menü adı (güvence)
 menu = st.session_state.menu_state
 allowed_menu_names = {isim for (isim, _ikon) in allowed_menus}
 if menu not in allowed_menu_names:
     menu = allowed_menus[0][0]
     st.session_state.menu_state = menu
 
-
-# Sidebar: manuel senkron
+# Örnek: senkron buton (varsa)
 with st.sidebar.expander("🔄 Sheets Senkron"):
     if st.button("Müşterileri Sheets’e Yaz"):
         push_customers_throttled()
+
 
 
 
