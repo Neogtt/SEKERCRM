@@ -1231,7 +1231,7 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
-    st.sidebar.markdown("""
+st.sidebar.markdown("""
 <style>
 /* 1) Tüm radio etiketlerinde opaklığı kapat, rengi güçlendir */
 div[data-testid="stSidebar"] .stRadio label,
