@@ -607,7 +607,7 @@ def load_dataframes_from_excel(path: str = "temp.xlsx"):
         df_musteri = pd.DataFrame(columns=[
             "Müşteri Adı", "Telefon", "E-posta", "Adres", "Ülke", "Satış Temsilcisi", "Kategori", "Durum", "Vade (Gün)", "Ödeme Şekli"
         ])
-        df_kayit = pd.DataFrame(columns=["Müşteri Adı", "Tarih", "Tip", "Açıklama"])
+        df_kayit = pd.DataFrame(columns=["Müşteri Adı", "Tarih", "Tip", "Açıklama", "Kullanıcı"])
         df_teklif = pd.DataFrame(columns=[
             "Müşteri Adı", "Tarih", "Teklif No", "Tutar", "Ürün/Hizmet", "Açıklama", "Durum", "PDF"
         ])
@@ -2383,7 +2383,7 @@ elif menu == "Temsilci Yönetimi":
 ### ===========================
 
 # Zorunlu kolonlar
-gerekli = ["ID", "Müşteri Adı", "Tarih", "Tip", "Açıklama"]
+gerekli = ["ID", "Müşteri Adı", "Tarih", "Tip", "Açıklama", "Kullanıcı"]
 for c in gerekli:
     if c not in df_kayit.columns:
         df_kayit[c] = ""
@@ -2423,7 +2423,8 @@ if menu == "Etkileşim Günlüğü":
                         "Müşteri Adı": musteri_sec,
                         "Tarih": tarih,
                         "Tip": tip,
-                        "Açıklama": aciklama
+                        "Açıklama": aciklama,
+                        "Kullanıcı": st.session_state.user or ""
                     }
                     df_kayit = pd.concat([df_kayit, pd.DataFrame([new_row])], ignore_index=True)
                     update_excel()
@@ -2451,7 +2452,12 @@ if menu == "Etkileşim Günlüğü":
         if not view.empty:
             goster = view.copy()
             goster["Tarih"] = pd.to_datetime(goster["Tarih"], errors="coerce").dt.strftime("%d/%m/%Y")
-            st.dataframe(goster[["Müşteri Adı", "Tarih", "Tip", "Açıklama"]].sort_values("Tarih", ascending=False), use_container_width=True)
+            goruntulenecek_kolonlar = ["Müşteri Adı", "Tarih", "Tip", "Açıklama", "Kullanıcı"]
+            mevcut_kolonlar = [kol for kol in goruntulenecek_kolonlar if kol in goster.columns]
+            st.dataframe(
+                goster[mevcut_kolonlar].sort_values("Tarih", ascending=False),
+                use_container_width=True
+            )
 
             # Dışa aktar
             st.download_button(
@@ -2500,6 +2506,10 @@ if menu == "Etkileşim Günlüğü":
                     df_kayit.at[orj_idx, "Tarih"] = tarih_g
                     df_kayit.at[orj_idx, "Tip"] = tip_g
                     df_kayit.at[orj_idx, "Açıklama"] = aciklama_g
+                    if "Kullanıcı" not in df_kayit.columns:
+                        df_kayit["Kullanıcı"] = ""
+                    if not str(df_kayit.at[orj_idx, "Kullanıcı"]).strip():
+                        df_kayit.at[orj_idx, "Kullanıcı"] = st.session_state.user or ""
                     update_excel()
                     st.success("Kayıt güncellendi!")
                     st.rerun()
