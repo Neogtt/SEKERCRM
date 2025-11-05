@@ -18,6 +18,47 @@ CURRENCY_SYMBOLS = ["USD", "$", "€", "EUR", "₺", "TL", "tl", "Tl"]
 
 ETA_COLUMNS = ["Müşteri Adı", "Proforma No", "Sevk Tarihi", "ETA Tarihi", "Açıklama"]
 
+TEMSILCI_BOLGE_SECENEKLERI = [
+    "Avrupa",
+    "Orta Doğu",
+    "Afrika",
+    "Kuzey Amerika",
+    "Güney Amerika",
+    "Asya",
+    "Uzak Doğu",
+    "Okyanusya",
+]
+
+DEFAULT_TEMSILCI_LISTESI = [
+    "KEMAL İLKER ÇELİKKALKAN",
+    "HÜSEYİN POLAT",
+    "EFE YILDIRIM",
+    "FERHAT ŞEKEROĞLU",
+]
+
+df_temsilciler = pd.DataFrame(columns=["Temsilci Adı", "Bölgeler", "Ülkeler", "Notlar"])
+temsilci_listesi = DEFAULT_TEMSILCI_LISTESI.copy()
+
+
+def refresh_temsilci_listesi():
+    global temsilci_listesi
+
+    if (
+        isinstance(df_temsilciler, pd.DataFrame)
+        and not df_temsilciler.empty
+        and "Temsilci Adı" in df_temsilciler.columns
+    ):
+        isimler = [
+            str(adi).strip()
+            for adi in df_temsilciler["Temsilci Adı"].astype(str)
+            if str(adi).strip()
+        ]
+        if isimler:
+            temsilci_listesi = sorted(set(isimler))
+            return
+
+    temsilci_listesi = DEFAULT_TEMSILCI_LISTESI.copy()
+    
 def smart_to_num(value):
     if pd.isna(value):
         return 0.0
@@ -127,7 +168,6 @@ ulke_listesi = sorted([
     "Yemen","Yeni Zelanda","Yunanistan","Zambiya","Zimbabve"
 ]) + ["Diğer"]
 
-temsilci_listesi = ["KEMAL İLKER ÇELİKKALKAN", "HÜSEYİN POLAT", "EFE YILDIRIM", "FERHAT ŞEKEROĞLU"]
 
 # --- Sabitler ---
 LOGO_FILE_ID     = "1DCxtSsAeR7Zfk2IQU0UMGmD0uTdNO1B3"
@@ -503,7 +543,7 @@ downloaded.GetContentFile("temp.xlsx")
 
 
 def load_dataframes_from_excel(path: str = "temp.xlsx"):
-    global df_musteri, df_kayit, df_teklif, df_proforma, df_evrak, df_eta, df_fuar_musteri
+    global df_musteri, df_kayit, df_teklif, df_proforma, df_evrak, df_eta, df_fuar_musteri, df_temsilciler
 
     if os.path.exists(path):
         try:
@@ -557,6 +597,12 @@ def load_dataframes_from_excel(path: str = "temp.xlsx"):
             df_fuar_musteri = pd.DataFrame(columns=[
                 "Fuar Adı", "Müşteri Adı", "Ülke", "Telefon", "E-mail", "Açıklamalar", "Tarih"
             ])
+        try:
+            df_temsilciler = pd.read_excel(path, sheet_name="Temsilciler")
+        except Exception:
+            df_temsilciler = pd.DataFrame(columns=[
+                "Temsilci Adı", "Bölgeler", "Ülkeler", "Notlar"
+            ])
     else:
         df_musteri = pd.DataFrame(columns=[
             "Müşteri Adı", "Telefon", "E-posta", "Adres", "Ülke", "Satış Temsilcisi", "Kategori", "Durum", "Vade (Gün)", "Ödeme Şekli"
@@ -578,13 +624,19 @@ def load_dataframes_from_excel(path: str = "temp.xlsx"):
         df_fuar_musteri = pd.DataFrame(columns=[
             "Fuar Adı", "Müşteri Adı", "Ülke", "Telefon", "E-mail", "Açıklamalar", "Tarih"
         ])
+        df_temsilciler = pd.DataFrame(columns=[
+            "Temsilci Adı", "Bölgeler", "Ülkeler", "Notlar"
+        ])
 
+    refresh_temsilci_listesi()
 
 load_dataframes_from_excel()
 
 def update_excel():
+    global df_musteri, df_kayit, df_teklif, df_proforma, df_evrak, df_eta, df_fuar_musteri, df_temsilciler
+    
     buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df_musteri.to_excel(writer, sheet_name="Sayfa1", index=False)
         df_kayit.to_excel(writer, sheet_name="Kayıtlar", index=False)
         df_teklif.to_excel(writer, sheet_name="Teklifler", index=False)
@@ -592,6 +644,7 @@ def update_excel():
         df_evrak.to_excel(writer, sheet_name="Evraklar", index=False)
         df_eta.to_excel(writer, sheet_name="ETA", index=False)
         df_fuar_musteri.to_excel(writer, sheet_name="FuarMusteri", index=False)
+        df_temsilciler.to_excel(writer, sheet_name="Temsilciler", index=False)
     buffer.seek(0)
     with open("temp.xlsx", "wb") as f:
         f.write(buffer.read())
@@ -1020,6 +1073,7 @@ import streamlit as st
 menuler = [
     ("Özet Ekran", "🧩"),
     ("Cari Kayıtlar", "👤"),
+    ("Temsilci Yönetimi", "🧑‍🤝‍🧑"),
     ("Etkileşim Günlüğü", "☎️"),
     ("Teklif Yönetimi", "💼"),
     ("Proforma Yönetimi", "📄"),
@@ -2047,6 +2101,220 @@ if menu == "Müşteri Portföyü":
                 st.success("Müşteri kaydı silindi!")
                 st.rerun()
 
+### ===========================
+### === TEMSİLCİ YÖNETİMİ
+### ===========================
+
+elif menu == "Temsilci Yönetimi":
+    st.markdown("<h2 style='color:#219A41; font-weight:bold;'>Temsilci Yönetimi</h2>", unsafe_allow_html=True)
+    st.caption(
+        "Yeni temsilci ekleyerek veya mevcut kaydı güncelleyerek tüm modüllerde kullanılacak listeyi buradan yönetebilirsiniz."
+    )
+
+    if not isinstance(df_temsilciler, pd.DataFrame):
+        df_temsilciler = pd.DataFrame(columns=["Temsilci Adı", "Bölgeler", "Ülkeler", "Notlar"])
+
+    mevcut_temsilciler = df_temsilciler.copy()
+
+    varsayilan_ad = ""
+    try:
+        if st.session_state.user and isinstance(st.session_state.user, str):
+            varsayilan_ad = st.session_state.user.strip()
+    except Exception:
+        varsayilan_ad = ""
+
+    temsilci_secenekleri = ["Yeni Temsilci"]
+    if not mevcut_temsilciler.empty and "Temsilci Adı" in mevcut_temsilciler.columns:
+        mevcut_isimler = [
+            str(adi).strip()
+            for adi in mevcut_temsilciler["Temsilci Adı"].astype(str)
+            if str(adi).strip()
+        ]
+        temsilci_secenekleri.extend(sorted(set(mevcut_isimler)))
+
+    col_sec, col_del = st.columns([3, 1])
+    with col_sec:
+        secilen_temsilci = st.selectbox("İşlem yapmak istediğiniz temsilci", temsilci_secenekleri)
+    with col_del:
+        silme_tusu = False
+        if secilen_temsilci != "Yeni Temsilci":
+            silme_tusu = st.button("Temsilciyi Sil", use_container_width=True)
+
+    def _ayir_listesi(deger):
+        if isinstance(deger, list):
+            return [str(x).strip() for x in deger if str(x).strip()]
+        metin = str(deger or "")
+        return [parca.strip() for parca in metin.split(",") if parca.strip()]
+
+    secili_kayit = None
+    if secilen_temsilci != "Yeni Temsilci" and not mevcut_temsilciler.empty:
+        ad_serisi = mevcut_temsilciler.get("Temsilci Adı", pd.Series(dtype=str)).astype(str)
+        eslesen = ad_serisi.str.strip().str.lower() == secilen_temsilci.strip().lower()
+        if eslesen.any():
+            secili_kayit = mevcut_temsilciler[eslesen].iloc[0]
+
+    varsayilan_bolgeler = _ayir_listesi(secili_kayit["Bölgeler"]) if secili_kayit is not None else []
+    varsayilan_ulkeler = _ayir_listesi(secili_kayit["Ülkeler"]) if secili_kayit is not None else []
+    varsayilan_notlar = str(secili_kayit["Notlar"]).strip() if secili_kayit is not None else ""
+    varsayilan_temsilci_adi = (
+        str(secili_kayit["Temsilci Adı"]).strip()
+        if secili_kayit is not None and str(secili_kayit["Temsilci Adı"]).strip()
+        else varsayilan_ad
+    )
+
+    form_state_keys = {
+        "adi": "temsilci_form_adi",
+        "bolgeler": "temsilci_form_bolgeler",
+        "ulkeler": "temsilci_form_ulkeler",
+        "notlar": "temsilci_form_notlar",
+    }
+
+    if "temsilci_secim_onceki" not in st.session_state:
+        st.session_state["temsilci_secim_onceki"] = None
+
+    if st.session_state["temsilci_secim_onceki"] != secilen_temsilci:
+        st.session_state[form_state_keys["adi"]] = varsayilan_temsilci_adi
+        st.session_state[form_state_keys["bolgeler"]] = varsayilan_bolgeler
+        st.session_state[form_state_keys["ulkeler"]] = varsayilan_ulkeler
+        st.session_state[form_state_keys["notlar"]] = varsayilan_notlar
+        st.session_state["temsilci_secim_onceki"] = secilen_temsilci
+
+    for key, varsayilan in [
+        (form_state_keys["adi"], varsayilan_temsilci_adi),
+        (form_state_keys["bolgeler"], varsayilan_bolgeler),
+        (form_state_keys["ulkeler"], varsayilan_ulkeler),
+        (form_state_keys["notlar"], varsayilan_notlar),
+    ]:
+        if key not in st.session_state:
+            st.session_state[key] = varsayilan
+
+    if silme_tusu:
+        ad_serisi = mevcut_temsilciler.get("Temsilci Adı", pd.Series(dtype=str)).astype(str)
+        eslesen = ad_serisi.str.strip().str.lower() == secilen_temsilci.strip().lower()
+        if eslesen.any():
+            df_temsilciler = mevcut_temsilciler.loc[~eslesen].reset_index(drop=True)
+            update_excel()
+            refresh_temsilci_listesi()
+            st.session_state["temsilci_secim_onceki"] = "Yeni Temsilci"
+            st.session_state[form_state_keys["adi"]] = varsayilan_ad
+            st.session_state[form_state_keys["bolgeler"]] = []
+            st.session_state[form_state_keys["ulkeler"]] = []
+            st.session_state[form_state_keys["notlar"]] = ""
+            st.success("Temsilci kaydı silindi.")
+            st.rerun()
+        else:
+            st.error("Seçilen temsilci bulunamadı.")
+
+    with st.form("temsilci_ekle_formu", clear_on_submit=False):
+        temsilci_adi = st.text_input("Temsilci Adı *", key=form_state_keys["adi"])
+        bolgeler = st.multiselect(
+            "Sorumlu Bölgeler *",
+            options=TEMSILCI_BOLGE_SECENEKLERI,
+            key=form_state_keys["bolgeler"],
+            help="Bir veya birden fazla bölge seçin."
+        )
+        ulkeler = st.multiselect(
+            "Sorumlu Ülkeler",
+            options=ulke_listesi,
+            key=form_state_keys["ulkeler"],
+            help="Temsilcinin aktif olarak takip ettiği ülkeleri seçin. Boş bırakılabilir."
+        )
+        notlar = st.text_area(
+            "Notlar",
+            key=form_state_keys["notlar"],
+            help="İletişim bilgileri veya ek açıklamalar için opsiyonel alan."
+        )
+        temsilci_kaydet = st.form_submit_button("Temsilciyi Kaydet")
+
+    if temsilci_kaydet:
+        hatalar = []
+        temsilci_adi_temiz = str(st.session_state.get(form_state_keys["adi"], "") or "").strip()
+        secilen_bolgeler = st.session_state.get(form_state_keys["bolgeler"], [])
+        secilen_ulkeler = st.session_state.get(form_state_keys["ulkeler"], [])
+        secilen_notlar = str(st.session_state.get(form_state_keys["notlar"], "") or "").strip()
+
+        if not temsilci_adi_temiz:
+            hatalar.append("Temsilci adı boş bırakılamaz.")
+        if not secilen_bolgeler:
+            hatalar.append("Lütfen en az bir bölge seçin.")
+
+        if hatalar:
+            for hata in hatalar:
+                st.error(hata)
+        else:
+            yeni_kayit = {
+                "Temsilci Adı": temsilci_adi_temiz,
+                "Bölgeler": ", ".join(secilen_bolgeler),
+                "Ülkeler": ", ".join(secilen_ulkeler) if secilen_ulkeler else "",
+                "Notlar": secilen_notlar,
+            }
+
+            if mevcut_temsilciler.empty:
+                df_temsilciler = pd.DataFrame([yeni_kayit])
+                mesaj = "Temsilci eklendi."
+            else:
+                ad_serisi = mevcut_temsilciler.get("Temsilci Adı", pd.Series(dtype=str)).astype(str)
+                is_edit_mode = secilen_temsilci != "Yeni Temsilci"
+                if is_edit_mode:
+                    mask_duzenlenen = ad_serisi.str.strip().str.lower() == secilen_temsilci.strip().lower()
+                else:
+                    mask_duzenlenen = pd.Series([False] * len(ad_serisi), index=ad_serisi.index)
+                mask_isim = ad_serisi.str.strip().str.lower() == temsilci_adi_temiz.lower()
+
+                if is_edit_mode and mask_duzenlenen.any():
+                    df_temsilciler.loc[mask_duzenlenen, ["Temsilci Adı", "Bölgeler", "Ülkeler", "Notlar"]] = [
+                        yeni_kayit["Temsilci Adı"],
+                        yeni_kayit["Bölgeler"],
+                        yeni_kayit["Ülkeler"],
+                        yeni_kayit["Notlar"],
+                    ]
+                    mesaj = "Temsilci bilgileri güncellendi."
+                elif mask_isim.any():
+                    df_temsilciler.loc[mask_isim, ["Temsilci Adı", "Bölgeler", "Ülkeler", "Notlar"]] = [
+                        yeni_kayit["Temsilci Adı"],
+                        yeni_kayit["Bölgeler"],
+                        yeni_kayit["Ülkeler"],
+                        yeni_kayit["Notlar"],
+                    ]
+                    mesaj = "Mevcut temsilci bilgileri güncellendi."
+                else:
+                    df_temsilciler = pd.concat([mevcut_temsilciler, pd.DataFrame([yeni_kayit])], ignore_index=True)
+                    mesaj = "Temsilci eklendi."
+
+            gerekli_kolonlar = ["Temsilci Adı", "Bölgeler", "Ülkeler", "Notlar"]
+            for kolon in gerekli_kolonlar:
+                if kolon not in df_temsilciler.columns:
+                    df_temsilciler[kolon] = ""
+
+            df_temsilciler = df_temsilciler.fillna("")
+            if "Temsilci Adı" in df_temsilciler.columns:
+                df_temsilciler = (
+                    df_temsilciler
+                    .drop_duplicates(subset=["Temsilci Adı"], keep="last")
+                    .reset_index(drop=True)
+                )
+
+            update_excel()
+            refresh_temsilci_listesi()
+
+            st.session_state["temsilci_secim_onceki"] = temsilci_adi_temiz
+            st.success(mesaj)
+            st.rerun()
+
+    st.markdown("#### Kayıtlı Temsilciler")
+    if df_temsilciler.empty:
+        st.info("Henüz temsilci kaydı bulunmuyor.")
+    else:
+        gosterilecek = df_temsilciler.copy()
+        for kolon in ["Temsilci Adı", "Bölgeler", "Ülkeler", "Notlar"]:
+            if kolon not in gosterilecek.columns:
+                gosterilecek[kolon] = ""
+        gosterilecek = gosterilecek[gosterilecek["Temsilci Adı"].astype(str).str.strip() != ""]
+        gosterilecek = gosterilecek.sort_values("Temsilci Adı").reset_index(drop=True)
+        st.dataframe(
+            gosterilecek[["Temsilci Adı", "Bölgeler", "Ülkeler", "Notlar"]],
+            use_container_width=True,
+        )
 
 ### ===========================
 ### === ETKİLEŞİM GÜNLÜĞÜ (Cloud-Sağlam) ===
