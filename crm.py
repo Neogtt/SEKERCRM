@@ -1231,6 +1231,46 @@ st.sidebar.markdown(
     unsafe_allow_html=True,
 )
 
+    st.sidebar.markdown("""
+<style>
+/* 1) Tüm radio etiketlerinde opaklığı kapat, rengi güçlendir */
+div[data-testid="stSidebar"] .stRadio label,
+div[data-testid="stSidebar"] .stRadio label * {
+    opacity: 1 !important;              /* solukluğu kaldır */
+    color: #EAF2FF !important;           /* daha açık, kontrastlı metin */
+    filter: none !important;             /* olası grayscale vb. iptal */
+    -webkit-font-smoothing: antialiased; /* yazı netliği */
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* 2) Seçilmemiş öğeler için bile okunaklılık */
+div[data-testid="stSidebar"] .stRadio label span {
+    font-weight: 600;
+    font-size: 0.98rem;
+    letter-spacing: .012em;
+    text-shadow: 0 0 10px rgba(8,16,32,.25);
+}
+
+/* 3) Seçili öğe: mavi vurguyu koru ama metni daha parlak tut */
+div[data-testid="stSidebar"] .stRadio [aria-checked="true"] span {
+    color: #FFFFFF !important;
+}
+
+/* 4) Hover: kontrastı biraz daha artır */
+div[data-testid="stSidebar"] .stRadio label:hover span {
+    color: #FFFFFF !important;
+}
+
+/* 5) Sidebar genel metin tonunu da yükselt (expander başlıkları v.b.) */
+div[data-testid="stSidebar"] .stMarkdown, 
+div[data-testid="stSidebar"] .stText, 
+div[data-testid="stSidebar"] .streamlit-expanderHeader p {
+    color: #EAF2FF !important;
+    opacity: 1 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Callback
 def _on_menu_change():
     sel_label = st.session_state.menu_radio_label
