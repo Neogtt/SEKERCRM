@@ -2311,11 +2311,73 @@ elif menu == "Temsilci Yönetimi":
                 gosterilecek[kolon] = ""
         gosterilecek = gosterilecek[gosterilecek["Temsilci Adı"].astype(str).str.strip() != ""]
         gosterilecek = gosterilecek.sort_values("Temsilci Adı").reset_index(drop=True)
+        
         st.dataframe(
             gosterilecek[["Temsilci Adı", "Bölgeler", "Ülkeler", "Notlar"]],
             use_container_width=True,
         )
 
+        st.markdown("##### Kayıtları Düzenle veya Sil")
+        st.caption(
+            "Tablodan güncellemek istediğiniz alanları düzenleyebilir veya `Sil` sütununu işaretleyerek kayıt kaldırabilirsiniz."
+        )
+
+        editor_df = gosterilecek[["Temsilci Adı", "Bölgeler", "Ülkeler", "Notlar"]].copy()
+        editor_df = editor_df.fillna("").astype(str)
+        editor_df["Sil"] = False
+
+        duzenlenen_df = st.data_editor(
+            editor_df,
+            num_rows="dynamic",
+            hide_index=True,
+            use_container_width=True,
+            key="temsilci_data_editor",
+            column_config={
+                "Sil": st.column_config.CheckboxColumn(label="Sil", help="Seçili satırı silmek için işaretleyin."),
+            },
+        )
+
+        col_editor_1, col_editor_2 = st.columns([1, 1])
+        with col_editor_1:
+            kaydet_duzenleme = st.button("Düzenlemeleri Kaydet", use_container_width=True)
+        with col_editor_2:
+            iptal_duzenleme = st.button("Düzenlemeleri İptal Et", use_container_width=True)
+
+        if iptal_duzenleme:
+            st.session_state.pop("temsilci_data_editor", None)
+            st.rerun()
+
+        if kaydet_duzenleme:
+            try:
+                kaydedilecek = pd.DataFrame(duzenlenen_df).copy()
+            except Exception:
+                kaydedilecek = pd.DataFrame(columns=["Temsilci Adı", "Bölgeler", "Ülkeler", "Notlar", "Sil"])
+
+            if "Sil" in kaydedilecek.columns:
+                kaydedilecek = kaydedilecek[kaydedilecek["Sil"] != True]
+                kaydedilecek = kaydedilecek.drop(columns=["Sil"], errors="ignore")
+
+            gerekli_kolonlar = ["Temsilci Adı", "Bölgeler", "Ülkeler", "Notlar"]
+            kaydedilecek = kaydedilecek.reindex(columns=gerekli_kolonlar)
+            kaydedilecek = kaydedilecek.fillna("")
+
+            kaydedilecek["Temsilci Adı"] = kaydedilecek["Temsilci Adı"].astype(str).str.strip()
+            kaydedilecek["Bölgeler"] = kaydedilecek["Bölgeler"].astype(str).str.strip()
+            kaydedilecek["Ülkeler"] = kaydedilecek["Ülkeler"].astype(str).str.strip()
+            kaydedilecek["Notlar"] = kaydedilecek["Notlar"].astype(str).str.strip()
+
+            kaydedilecek = kaydedilecek[kaydedilecek["Temsilci Adı"] != ""]
+
+            if kaydedilecek.empty:
+                st.error("En az bir temsilci kaydı bırakmalısınız.")
+            else:
+                kaydedilecek = kaydedilecek.drop_duplicates(subset=["Temsilci Adı"], keep="last").reset_index(drop=True)
+                df_temsilciler = kaydedilecek
+                update_excel()
+                refresh_temsilci_listesi()
+                st.session_state.pop("temsilci_data_editor", None)
+                st.success("Temsilci kayıtları güncellendi.")
+                st.rerun()
 ### ===========================
 ### === ETKİLEŞİM GÜNLÜĞÜ (Cloud-Sağlam) ===
 ### ===========================
