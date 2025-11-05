@@ -1080,7 +1080,7 @@ menuler = [
     ("Sipariş Operasyonları", "🚚"),
     ("Fatura işlemleri", "🧾"),
     ("Tahsilat planı", "💳"),
-    ("ETA izleme", "🛳️"),
+    ("ETA İzleme", "🛳️"),
     ("Fuar Kayıtları", "🎫"),
     ("İçerik Arşivi", "🗂️"),
     ("Satış Analitiği", "📈"),
@@ -1091,7 +1091,7 @@ menuler = [
 
 # Kullanıcı izinleri (tek entry!)
 USER_MENU_PERMISSIONS = {
-    "Muhammed": {"ETA izleme", "Fatura işlemleri"},
+    "Muhammed": {"ETA İzleme", "Fatura işlemleri"},
 }
 
 def resolve_allowed_menus(username):
