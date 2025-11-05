@@ -1183,7 +1183,7 @@ st.sidebar.markdown(
         display: flex;
         align-items: center;
         background: rgba(15, 23, 42, 0.68);
-        color: #f1f5ff;
+        color: #ffffff !important;
         transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.12s ease, box-shadow 0.2s ease;
     }
 
@@ -1197,7 +1197,7 @@ st.sidebar.markdown(
 
     div[data-testid="stSidebar"] .stRadio label span {
         font-weight: 600;
-        color: inherit !important;
+        color: #ffffff !important;
         font-size: 0.98rem;
         letter-spacing: 0.012em;
         white-space: pre;
